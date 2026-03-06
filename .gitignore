@@ -1,0 +1,44 @@
+# Python临时文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.dll
+*.exe
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv
+.env
+
+# IDE配置
+.vscode/
+.idea/
+
+# 本地测试文件
+temp/
+uploads/
+test_files/
+*.tmp
+*.temp
+
+# 数据集（不上传，太大）
+data/
+*.xlsx
+!template.xlsx    # 但保留模板文件
+
+# 密钥文件
+*.key
+*.pem
+config.local.py
+
+# 日志
+*.log
+logs/
+
+# 系统文件
+.DS_Store
+Thumbs.db
