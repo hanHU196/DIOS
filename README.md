@@ -8,7 +8,7 @@
 
 ## 技术栈
 - Python 3.9+
-- Streamlit（Web界面）
+- Vue（Web界面）
 - LangChain（AI框架）
 - OpenAI API / 国产大模型API
 - Pandas（Excel处理）
