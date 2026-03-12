@@ -1,18 +1,21 @@
-#文档读取
+# -*- coding: utf-8 -*-
+import sys
+import io
+import os
+import pdfplumber
+from docx import Document
+import pandas as pd
+import markdown
+import re
+from pathlib import Path
 
-import os          # 操作系统相关功能，比如检查文件是否存在、获取文件后缀
-import pdfplumber  # 读取PDF的库
-from docx import Document  # 读取Word的库
-import pandas as pd        # 处理Excel的库（最强大的数据处理工具）
-import markdown    # 处理Markdown的库
-import re          # 正则表达式，用来处理文字（暂时用不到，但留着备用）
-from pathlib import Path  # 处理文件路径的现代方式
+# 强制标准输出使用UTF-8
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-# ===== 第二部分：定义类 =====
+# 定义类 
 class DocumentReader:
     """
     万能文档读取器
-    把类的功能想象成一个"工具箱"，里面有很多工具（函数）
     用的时候：reader = DocumentReader()  # 创建工具箱
             content = reader.read("文件")  # 用工具箱里的read工具
     """
@@ -20,10 +23,8 @@ class DocumentReader:
     def __init__(self):
         """
         初始化函数：创建工具箱时自动执行
-        类似于"开机自检"，检查支持哪些格式
         """
         # 创建一个字典：文件后缀 -> 对应的读取函数
-        # 这样以后加新格式很方便，只要在这里加一行
         self.supported_formats = {
             '.txt': self._read_txt,      # txt文件用_read_txt函数读
             '.md': self._read_md,        # md文件用_read_md函数读
@@ -34,298 +35,332 @@ class DocumentReader:
             '.csv': self._read_csv        # CSV文件用_read_csv读
         }
         
-        # 打印初始化成功信息（调试用）
+        # 打印初始化成功信息
         print("✅ 文档读取器初始化成功！支持格式：", list(self.supported_formats.keys()))
     
-    # ===== 第三部分：统一入口函数 =====
+    # 统一入口函数
     def read(self, file_path):
         """
-        这是最重要的函数！对外统一接口
-        别人调用时只需要：reader.read("文件名")
-        不用管是什么格式，内部自动处理
-        
+        对外统一接口
         参数：file_path 文件路径（字符串）
         返回：文件内容（字符串）
+        异常：如果文件不存在或读取失败，抛出异常
         """
         # 1. 检查文件是否存在
-        # os.path.exists 是Python内置函数，判断文件/文件夹是否存在
         if not os.path.exists(file_path):
-            return f"❌ 文件不存在：{file_path}"
+            raise FileNotFoundError(f"文件不存在：{file_path}")
         
         # 2. 获取文件后缀
-        # os.path.splitext 把文件名拆成(名字, 后缀)
-        # 例如 "合同.pdf" -> ("合同", ".pdf")
-        ext = os.path.splitext(file_path)[1].lower()  # .lower()转成小写
-        
-        # 获取文件名（不含路径），用于显示
+        ext = os.path.splitext(file_path)[1].lower()
         file_name = os.path.basename(file_path)
         
         print(f"📖 正在读取：{file_name}")
         
         # 3. 根据后缀选择读取方法
-        # 如果后缀在支持的格式字典里
         if ext in self.supported_formats:
             try:
-                # 从字典里取出对应的函数，然后调用它
-                # 比如 .pdf 对应 self._read_pdf，所以这里就是调用 self._read_pdf(file_path)
                 content = self.supported_formats[ext](file_path)
                 print(f"✅ 读取成功！共 {len(content)} 字符")
                 return content
             except Exception as e:
-                # 如果出错，捕获异常并返回错误信息
-                error_msg = f"❌ 读取失败：{str(e)}"
-                print(error_msg)
-                return error_msg
+                raise Exception(f"读取失败：{str(e)}")
         else:
-            # 不支持的文件格式
-            error_msg = f"❌ 不支持的文件格式：{ext}，支持格式：{list(self.supported_formats.keys())}"
-            print(error_msg)
-            return error_msg
+            raise ValueError(f"不支持的文件格式：{ext}，支持格式：{list(self.supported_formats.keys())}")
     
-    # ===== 第四部分：各种格式的具体读取函数 =====
-    
+    # 各种格式的具体读取函数
     def _read_txt(self, file_path):
-        """
-        读取TXT文件
-        函数名前加_表示"内部使用"，不建议外部直接调用
-        
-        难点：中文编码问题
-        不同电脑保存txt用的编码可能不同：utf-8, gbk, gb2312...
-        """
-        # 准备一个列表，放着可能用到的编码
+        """读取TXT文件 - 完整内容"""
         encodings = ['utf-8', 'gbk', 'gb2312', 'utf-16', 'ansi']
         
-        # 逐个尝试每种编码
         for encoding in encodings:
             try:
-                # 尝试用这种编码打开文件
                 with open(file_path, 'r', encoding=encoding) as f:
-                    content = f.read()  # 读取全部内容
+                    content = f.read()
                 print(f"  使用编码：{encoding}")
-                return content  # 成功就返回
+                return f"【TXT文件】{os.path.basename(file_path)}\n{'='*60}\n{content}"
             except UnicodeDecodeError:
-                # 如果解码失败，继续尝试下一种编码
                 continue
-            except Exception as e:
-                # 其他错误也继续尝试
+            except Exception:
                 continue
         
         # 如果所有编码都失败，用二进制模式读取
-        # 'rb' 表示二进制模式，然后用ignore忽略无法解码的字符
         with open(file_path, 'rb') as f:
             content = f.read().decode('utf-8', errors='ignore')
         print("  使用二进制模式")
-        return content
+        return f"【TXT文件】{os.path.basename(file_path)}\n{'='*60}\n{content}"
     
     def _read_md(self, file_path):
-        """
-        读取Markdown文件
-        MD其实就是带特殊格式的txt，所以先按txt读
-        """
-        # 先按txt读
+        """读取Markdown文件 - 完整内容"""
         content = self._read_txt(file_path)
         
-        # 可选：用markdown库转成HTML，保留结构
         try:
-            # markdown.markdown 把MD转成HTML
             html = markdown.markdown(content)
-            # 返回原始内容和部分HTML（方便调试）
-            return f"【Markdown文档】\n{content}\n\n【HTML转换】\n{html[:500]}..."
+            return f"【Markdown文档】{os.path.basename(file_path)}\n{'='*60}\n【原始内容】\n{content}\n\n{'='*60}\n【HTML转换】\n{html}"
         except:
-            # 如果转换失败，至少返回原始内容
-            return f"【Markdown文档】\n{content}"
+            return f"【Markdown文档】{os.path.basename(file_path)}\n{'='*60}\n{content}"
     
     def _read_excel(self, file_path):
-        """
-        读取Excel文件
-        用pandas库，它是最强大的数据处理工具
-        """
+        """读取Excel文件 - 完整内容"""
         try:
-            # 1. 用ExcelFile读取整个Excel文件（可以获取所有sheet）
             excel_file = pd.ExcelFile(file_path)
-            sheet_names = excel_file.sheet_names  # 获取所有sheet的名字
+            sheet_names = excel_file.sheet_names
             
-            result = []  # 用来存放输出的每一行
-            result.append(f"【Excel文件】共 {len(sheet_names)} 个工作表")
+            all_content = []
+            all_content.append(f"【Excel文件】{os.path.basename(file_path)}")
+            all_content.append(f"工作表数量：{len(sheet_names)}")
+            all_content.append("="*60)
             
-            # 遍历每个sheet
-            for sheet_name in sheet_names:
-                # 读取这个sheet的数据，存到DataFrame（pandas的核心数据结构，类似表格）
+            for sheet_idx, sheet_name in enumerate(sheet_names):
                 df = pd.read_excel(file_path, sheet_name=sheet_name)
-                rows, cols = df.shape  # df.shape 返回(行数, 列数)
+                rows, cols = df.shape
                 
-                result.append(f"\n📊 工作表：{sheet_name}")
-                result.append(f"  行数：{rows}，列数：{cols}")
+                all_content.append(f"\n📊 工作表 {sheet_idx+1}: {sheet_name}")
+                all_content.append(f"行数: {rows}, 列数: {cols}")
+                all_content.append("-"*40)
                 
-                # 显示列名（只显示前10个，防止太长）
-                # df.columns 获取列名
-                result.append(f"  列名：{', '.join(str(c) for c in df.columns[:10])}")
+                # 设置pandas显示选项以确保完整输出
+                with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None, 'display.max_colwidth', None):
+                    # 将DataFrame转换为字符串
+                    df_string = df.to_string(index=True, header=True)
+                    all_content.append(df_string)
                 
-                # 显示前3行数据
-                if rows > 0:
-                    result.append("  数据预览（前3行）：")
-                    for i in range(min(3, rows)):
-                        # df.iloc[i] 获取第i行，.to_dict()转成字典
-                        row_data = df.iloc[i].to_dict()
-                        row_str = f"    第{i+1}行："
-                        # 只显示前5列，防止太长
-                        for k, v in list(row_data.items())[:5]:
-                            row_str += f"{k}={v} "
-                        result.append(row_str)
+                all_content.append("-"*40)
             
-            # 用换行符把所有内容连起来
-            return '\n'.join(result)
+            return '\n'.join(all_content)
             
         except Exception as e:
-            return f"Excel读取失败：{str(e)}"
+            return f"❌ Excel读取失败：{str(e)}"
     
     def _read_csv(self, file_path):
-        """
-        读取CSV文件
-        CSV就是逗号分隔的文本表格
-        """
+        """读取CSV文件 - 完整内容"""
         try:
-            # pandas直接读csv
             df = pd.read_csv(file_path)
             rows, cols = df.shape
             
             result = []
-            result.append(f"【CSV文件】{rows}行×{cols}列")
-            result.append(f"列名：{', '.join(str(c) for c in df.columns[:10])}")
+            result.append(f"【CSV文件】{os.path.basename(file_path)}")
+            result.append(f"总行数：{rows}，总列数：{cols}")
+            result.append("="*60)
+            result.append("列名：")
+            result.append(", ".join([str(col) for col in df.columns]))
+            result.append("-"*40)
+            result.append("【完整数据】")
             
-            # 显示前3行
-            result.append("数据预览（前3行）：")
-            # df.head(3) 取前3行，to_string()转成字符串
-            result.append(df.head(3).to_string())
+            # 设置pandas显示选项以确保完整输出
+            with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None, 'display.max_colwidth', None):
+                result.append(df.to_string(index=True, header=True))
             
             return '\n'.join(result)
             
         except Exception as e:
-            return f"CSV读取失败：{str(e)}"
+            return f"❌ CSV读取失败：{str(e)}"
     
     def _read_docx(self, file_path):
-        """
-        读取Word文档
-        Word的结构：段落(paragraphs) + 表格(tables) + 可能还有图片
-        """
+        """读取Word文档 - 包含图片OCR识别"""
         try:
-            # 打开Word文档
+            from docx import Document
+            import zipfile
+            import os
+            from pathlib import Path
+            import tempfile
+            
+            # 尝试导入OCR库
+            try:
+                import easyocr
+                reader = easyocr.Reader(['ch_sim', 'en'])  # 中文+英文
+                ocr_available = True
+            except ImportError:
+                print("  ⚠️ easyocr未安装，图片将只保存不识别")
+                ocr_available = False
+            
             doc = Document(file_path)
             
-            # 1. 读取所有段落
+            result = []
+            result.append(f"【Word文档】{os.path.basename(file_path)}")
+            result.append("="*60)
+            
+            # 读取所有段落
             paragraphs = []
             for para in doc.paragraphs:
-                if para.text.strip():  # strip()去掉空格，如果是空行就跳过
+                if para.text.strip():
                     paragraphs.append(para.text)
             
-            # 2. 读取所有表格
-            tables = []
-            for table in doc.tables:
-                table_data = []
-                for row in table.rows:
-                    # 把一行中每个单元格的内容用 | 连接起来
-                    row_text = ' | '.join([cell.text for cell in row.cells])
-                    if row_text.strip():
-                        table_data.append(row_text)
-                if table_data:
-                    tables.append('\n'.join(table_data))
+            result.append(f"\n【段落内容】（共{len(paragraphs)}段）")
+            result.append("-"*40)
+            for i, para in enumerate(paragraphs, 1):
+                result.append(f"{i}. {para}")
             
-            # 3. 检测是否有图片
-            # Word文档里，图片是作为一种"关系"存在的
-            has_images = False
-            for rel in doc.part.rels.values():
-                if "image" in rel.reltype:  # 如果关系类型包含image
-                    has_images = True
-                    break
-            
-            # 4. 组装结果
-            result = []
-            result.append(f"【Word文档】{file_path}")
-            result.append(f"段落数：{len(paragraphs)}")
-            result.append(f"表格数：{len(tables)}")
-            result.append(f"包含图片：{'是' if has_images else '否'}")
-            
-            if has_images:
-                result.append("⚠️ 文档包含图片，当前只能读取文字")
-            
-            # 显示部分段落（最多20段）
-            if paragraphs:
-                result.append("\n【文字内容】")
-                for i, para in enumerate(paragraphs[:20]):
-                    # 只显示前100字，后面加...
-                    preview = para[:100] + ('...' if len(para) > 100 else '')
-                    result.append(f"{i+1}. {preview}")
-                if len(paragraphs) > 20:
-                    result.append(f"... 还有{len(paragraphs)-20}段")
-            
-            # 显示部分表格（最多3个）
-            if tables:
+            # 读取所有表格
+            if doc.tables:
                 result.append("\n【表格内容】")
-                for i, table in enumerate(tables[:3]):
-                    result.append(f"表格{i+1}：\n{table[:500]}")
+                for table_idx, table in enumerate(doc.tables, 1):
+                    result.append(f"\n表格 {table_idx}:")
+                    result.append("-"*20)
+                    for row in table.rows:
+                        row_text = ' | '.join([cell.text for cell in row.cells])
+                        if row_text.strip():
+                            result.append(row_text)
+            
+            # 提取并识别图片
+            result.append("\n【图片内容】")
+            result.append("-"*40)
+            
+            # 方法1：通过rels提取图片
+            image_count = 0
+            for rel in doc.part.rels.values():
+                if "image" in rel.reltype:
+                    try:
+                        image_count += 1
+                        image_data = rel.target_part.blob
+                        
+                        # 保存图片到临时文件
+                        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                            tmp_file.write(image_data)
+                            tmp_path = tmp_file.name
+                        
+                        result.append(f"\n📷 图片 {image_count}:")
+                        
+                        # OCR识别
+                        if ocr_available:
+                            ocr_result = reader.readtext(tmp_path, detail=0)
+                            if ocr_result:
+                                result.append("  识别文字:")
+                                for text in ocr_result:
+                                    result.append(f"    {text}")
+                            else:
+                                result.append("  未识别到文字")
+                        
+                        # 清理临时文件
+                        os.unlink(tmp_path)
+                        
+                    except Exception as e:
+                        result.append(f"  图片处理失败: {str(e)}")
+            
+            # 方法2：通过解压方式提取所有图片
+            if image_count == 0:
+                result.append("\n尝试备用方法提取图片...")
+                try:
+                    with zipfile.ZipFile(file_path, 'r') as docx_zip:
+                        for file_name in docx_zip.namelist():
+                            if file_name.startswith('word/media/'):
+                                image_count += 1
+                                image_data = docx_zip.read(file_name)
+                                
+                                # 保存并识别
+                                ext = os.path.splitext(file_name)[1]
+                                with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp_file:
+                                    tmp_file.write(image_data)
+                                    tmp_path = tmp_file.name
+                                
+                                result.append(f"\n📷 图片 {image_count} ({os.path.basename(file_name)}):")
+                                
+                                if ocr_available:
+                                    ocr_result = reader.readtext(tmp_path, detail=0)
+                                    if ocr_result:
+                                        result.append("  识别文字:")
+                                        for text in ocr_result:
+                                            result.append(f"    {text}")
+                                    else:
+                                        result.append("  未识别到文字")
+                                
+                                os.unlink(tmp_path)
+                except Exception as e:
+                    result.append(f"  解压提取失败: {str(e)}")
+            
+            if image_count == 0:
+                result.append("  未找到图片")
             
             return '\n'.join(result)
             
         except Exception as e:
-            return f"Word读取失败：{str(e)}"
-    
-    def _read_pdf(self, file_path):
-        """
-        读取PDF文件
-        PDF的每页可能包含文字和表格
-        """
-        try:
-            text_content = []
-            
-            # 打开PDF
-            with pdfplumber.open(file_path) as pdf:
-                total_pages = len(pdf.pages)  # 总页数
-                result = [f"【PDF文件】共 {total_pages} 页"]
+            return f"❌ Word读取失败：{str(e)}\n\n请尝试安装OCR库：pip install easyocr"
+            """读取Word文档 - 完整内容"""
+            try:
+                doc = Document(file_path)
                 
-                # 遍历每一页
-                for i, page in enumerate(pdf.pages):
-                    # 提取文字
-                    page_text = page.extract_text() or ""  # 如果没文字就返回空字符串
+                result = []
+                result.append(f"【Word文档】{os.path.basename(file_path)}")
+                result.append("="*60)
+                
+                # 读取所有段落
+                paragraphs = []
+                for para in doc.paragraphs:
+                    if para.text.strip():
+                        paragraphs.append(para.text)
+                
+                result.append(f"【段落内容】（共{len(paragraphs)}段）")
+                result.append("-"*40)
+                for i, para in enumerate(paragraphs, 1):
+                    result.append(f"{i}. {para}")
+                
+                # 读取所有表格
+                if doc.tables:
+                    result.append("\n【表格内容】")
+                    for table_idx, table in enumerate(doc.tables, 1):
+                        result.append(f"\n表格 {table_idx}:")
+                        result.append("-"*20)
+                        
+                        # 读取表格所有行
+                        for row in table.rows:
+                            row_text = ' | '.join([cell.text for cell in row.cells])
+                            if row_text.strip():
+                                result.append(row_text)
+                
+                # 检查图片
+                has_images = False
+                for rel in doc.part.rels.values():
+                    if "image" in rel.reltype:
+                        has_images = True
+                        break
+                
+                if has_images:
+                    result.append("\n⚠️ 注意：文档包含图片，当前版本只能读取文字内容")
+                
+                return '\n'.join(result)
+                
+            except Exception as e:
+                return f"❌ Word读取失败：{str(e)}"
+        
+    def _read_pdf(self, file_path):
+        """读取PDF文件 - 完整内容"""
+        try:
+            with pdfplumber.open(file_path) as pdf:
+                total_pages = len(pdf.pages)
+                result = []
+                result.append(f"【PDF文件】{os.path.basename(file_path)}")
+                result.append(f"总页数：{total_pages}")
+                result.append("="*60)
+                
+                for page_num, page in enumerate(pdf.pages, 1):
+                    result.append(f"\n📄 第 {page_num} 页")
+                    result.append("-"*40)
+                    
+                    # 提取页面文字
+                    page_text = page.extract_text() or ""
+                    if page_text.strip():
+                        result.append(page_text)
+                    else:
+                        result.append("（此页无文字内容）")
                     
                     # 提取表格
                     tables = page.extract_tables()
-                    
-                    result.append(f"\n--- 第 {i+1} 页 ---")
-                    
-                    # 显示文字预览
-                    if page_text.strip():
-                        preview = page_text[:200] + ('...' if len(page_text) > 200 else '')
-                        result.append(f"文字：{preview}")
-                    else:
-                        result.append("文字：无")
-                    
-                    # 显示表格信息
                     if tables:
-                        result.append(f"表格：{len(tables)}个")
-                        
-                        # 显示第一个表格预览
-                        if tables[0]:
-                            result.append("表格预览：")
-                            for row in tables[0][:3]:  # 只显示前3行
-                                # 把每个单元格转成字符串，用 | 连接
-                                row_str = ' | '.join([str(cell) if cell else '' for cell in row])
-                                result.append(f"  {row_str}")
-                    
-                    # 只处理前5页，避免输出太长
-                    if i >= 4:
-                        result.append(f"\n... 还有 {total_pages-5} 页未显示")
-                        break
-            
-            return '\n'.join(result)
+                        result.append("\n表格：")
+                        for table_idx, table in enumerate(tables, 1):
+                            if table:
+                                result.append(f"表格 {table_idx}:")
+                                for row in table:
+                                    row_text = ' | '.join([str(cell) if cell else '' for cell in row])
+                                    if row_text.strip():
+                                        result.append(f"  {row_text}")
+                
+                return '\n'.join(result)
             
         except Exception as e:
-            return f"PDF读取失败：{str(e)}"
+            return f"❌ PDF读取失败：{str(e)}"
     
     def save_to_file(self, content, output_path):
-        """
-        保存读取的内容到文件（调试用）
-        可以把读出来的内容存成txt，方便查看
-        """
+        """保存读取的内容到文件"""
         try:
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(content)
@@ -336,78 +371,102 @@ class DocumentReader:
             return False
 
 
-# ===== 第五部分：测试代码 =====
-# 当直接运行这个文件时（python document_reader.py），会执行下面的代码
+# ===== 交互式测试代码 =====
 if __name__ == "__main__":
-    print("="*50)
-    print("文档读取模块测试")
-    print("="*50)
+    print("="*60)
+    print("📚 文档读取工具 - 完整输出版本")
+    print("="*60)
     
     # 创建读取器
     reader = DocumentReader()
     
-    # 创建测试文件夹
-    test_dir = "test_files"
-    os.makedirs(test_dir, exist_ok=True)  # 如果不存在就创建
-    
-    # 1. 测试TXT
-    print("\n1. 测试TXT文件")
-    txt_path = os.path.join(test_dir, "test.txt")
-    with open(txt_path, 'w', encoding='utf-8') as f:
-        f.write("""这是一个测试文本文件。
-甲方：XX科技有限公司
-乙方：YY大学
-金额：10000元
-签订日期：2024年3月1日
-备注：这是一份采购合同。""")
-    content = reader.read(txt_path)
-    print(content[:200])
-    
-    # 2. 测试MD
-    print("\n2. 测试MD文件")
-    md_path = os.path.join(test_dir, "test.md")
-    with open(md_path, 'w', encoding='utf-8') as f:
-        f.write("""# 项目文档
-## 第一章
-这是一个测试段落。
-- 列表项1
-- 列表项2
-## 第二章
-结束。""")
-    content = reader.read(md_path)
-    print(content[:200])
-    
-    # 3. 测试Excel
-    print("\n3. 测试Excel文件")
-    excel_path = os.path.join(test_dir, "test.xlsx")
-    df = pd.DataFrame({
-        '姓名': ['张三', '李四', '王五'],
-        '年龄': [20, 21, 22],
-        '部门': ['技术部', '市场部', '财务部'],
-        '工资': [8000, 9000, 8500]
-    })
-    df.to_excel(excel_path, index=False, sheet_name='员工信息')
-    content = reader.read(excel_path)
-    print(content[:300])
-    
-    # 4. 测试Word（需要有word文件，这里跳过）
-    print("\n4. Word测试（需要有word文件）")
-    word_path = os.path.join(test_dir, "test.docx")
-    if os.path.exists(word_path):
-        content = reader.read(word_path)
-        print(content[:300])
-    else:
-        print(f"请手动放一个Word文件到：{word_path}")
-    
-    # 5. 测试PDF（需要有pdf文件）
-    print("\n5. PDF测试（需要有pdf文件）")
-    pdf_path = os.path.join(test_dir, "test.pdf")
-    if os.path.exists(pdf_path):
-        content = reader.read(pdf_path)
-        print(content[:300])
-    else:
-        print(f"请手动放一个PDF文件到：{pdf_path}")
-    
-    print("\n" + "="*50)
-    print("测试完成！")
-    print("="*50)
+    while True:
+        print("\n" + "-"*60)
+        print("请选择操作：")
+        print("1. 读取单个文件（输入路径）")
+        print("2. 批量读取 test_files 文件夹")
+        print("3. 退出")
+        print("-"*60)
+        
+        choice = input("请输入选项 (1/2/3): ").strip()
+        
+        if choice == '1':
+            # 读取单个文件
+            file_path = input("\n请输入文件路径（不加双引号）：").strip()
+            # 自动去除可能存在的引号
+            file_path = file_path.strip('"').strip("'")
+            
+            if not os.path.exists(file_path):
+                print(f"❌ 文件不存在：{file_path}")
+                continue
+            
+            try:
+                # 读取文件
+                content = reader.read(file_path)
+                
+                # 询问是否保存
+                save = input("\n是否保存到文件？(y/n): ").strip().lower()
+                if save == 'y':
+                    output_path = f"output_{os.path.basename(file_path)}.txt"
+                    reader.save_to_file(content, output_path)
+                else:
+                    # 如果用户不保存，则显示全部内容
+                    print("\n" + "="*60)
+                    print("📄 读取结果（完整内容）：")
+                    print("="*60)
+                    print(content)
+                    
+            except Exception as e:
+                print(f"❌ 读取失败：{e}")
+        
+        elif choice == '2':
+            # 批量读取 test_files 文件夹
+            test_dir = "test_files"
+            
+            if not os.path.exists(test_dir):
+                print(f"❌ 文件夹不存在：{test_dir}")
+                os.makedirs(test_dir)
+                print(f"已创建文件夹：{test_dir}，请把文件放进去再试")
+                continue
+            
+            files = os.listdir(test_dir)
+            if not files:
+                print(f"❌ 文件夹为空：{test_dir}")
+                continue
+            
+            print(f"\n📊 找到 {len(files)} 个文件：")
+            for i, f in enumerate(files, 1):
+                ext = os.path.splitext(f)[1].lower()
+                status = "✅" if ext in reader.supported_formats else "❌"
+                print(f"  {i}. {status} {f}")
+            
+            # 创建结果文件夹
+            output_dir = "output_results"
+            os.makedirs(output_dir, exist_ok=True)
+            print("\n开始批量读取...")
+            
+            for filename in files:
+                ext = os.path.splitext(filename)[1].lower()
+                if ext not in reader.supported_formats:
+                    print(f"⏭️ 跳过不支持格式：{filename}")
+                    continue
+                    
+                file_path = os.path.join(test_dir, filename)
+                print(f"\n📄 处理：{filename}")
+                
+                try:
+                    content = reader.read(file_path)
+                    # 保存结果
+                    output_path = os.path.join(output_dir, f"{filename}.txt")
+                    reader.save_to_file(content, output_path)
+                except Exception as e:
+                    print(f"❌ 处理失败：{e}")
+            
+            print(f"\n✅ 批量处理完成！结果保存在 {output_dir} 文件夹")
+        
+        elif choice == '3':
+            print("\n👋 再见！")
+            break
+        
+        else:
+            print("❌ 无效选项，请重新输入")
