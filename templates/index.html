@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A23 智能填表系统</title>
+    <!-- Bootstrap 5 样式 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .header { background-color: #0d6efd; color: white; padding: 2rem 0; margin-bottom: 2rem; }
+        .card { border-radius: 1rem; box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1); }
+        .btn-primary { background-color: #0d6efd; border: none; padding: 0.75rem 2rem; font-size: 1.2rem; }
+        .btn-primary:hover { background-color: #0b5ed7; }
+        .progress { height: 2rem; font-size: 1rem; }
+        .footer { margin-top: 3rem; padding: 1rem 0; text-align: center; color: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="header text-center">
+        <h1 class="display-4">📄 A23 智能填表系统</h1>
+        <p class="lead">基于大语言模型的文档理解与多源数据融合系统</p>
+    </div>
+
+    <div class="container">
+        <div class="row g-4">
+            <!-- 左侧：文档上传 -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">📁 1. 上传文档</h5>
+                        <small class="text-muted">支持 txt / docx / md / xlsx (演示暂只支持txt)</small>
+                    </div>
+                    <div class="card-body">
+                        <form id="uploadForm" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="docFiles" class="form-label">选择文档文件（可多选）</label>
+                                <input class="form-control" type="file" id="docFiles" name="files" multiple accept=".txt,.docx,.md,.xlsx">
+                            </div>
+                            <div id="fileList" class="mt-2">
+                                <!-- 文件列表动态显示 -->
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：指令与模板 -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">⚙️ 2. 输入指令与字段</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="instruction" class="form-label">自然语言指令</label>
+                            <input type="text" class="form-control" id="instruction" placeholder="例如：帮我填表，提取姓名、金额">
+                        </div>
+                        <div class="mb-3">
+                            <label for="fields" class="form-label">要提取的字段（可选，逗号分隔）</label>
+                            <input type="text" class="form-control" id="fields" placeholder="例如：姓名,金额,日期">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Excel模板（可选，演示可不传）</label>
+                            <input class="form-control" type="file" id="template" accept=".xlsx">
+                        </div>
+                        <button class="btn btn-primary w-100" id="startBtn" onclick="process()">🚀 开始智能填表</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 进度条和状态 -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5>处理进度</h5>
+                        <div class="progress mb-2" style="display: none;" id="progressContainer">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 id="progressBar" role="progressbar" style="width: 0%">0%</div>
+                        </div>
+                        <div id="statusMessage" class="text-muted"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 结果预览区 -->
+        <div class="row mt-4" id="resultArea" style="display: none;">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">✅ 处理完成</h5>
+                    </div>
+                    <div class="card-body">
+                        <p id="resultMessage"></p>
+                        <a id="downloadLink" class="btn btn-success" href="#">📥 下载填好的Excel</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>第十七届服创大赛 · A23赛题 | 演示版本 2026.03.13</p>
+    </div>
+
+    <!-- Bootstrap JS 和 自定义脚本 -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 显示已选文件列表
+        document.getElementById('docFiles').addEventListener('change', function(e) {
+            const fileList = document.getElementById('fileList');
+            const files = e.target.files;
+            let html = '<ul class="list-group">';
+            for (let i = 0; i < files.length; i++) {
+                html += `<li class="list-group-item">${files[i].name} (${(files[i].size/1024).toFixed(1)} KB)</li>`;
+            }
+            html += '</ul>';
+            fileList.innerHTML = html;
+        });
+
+        async function process() {
+            const formData = new FormData();
+            const files = document.getElementById('docFiles').files;
+            const instruction = document.getElementById('instruction').value;
+            const fields = document.getElementById('fields').value;
+            const template = document.getElementById('template').files[0]; // 模板暂不使用
+
+            if (files.length === 0) {
+                alert('请至少上传一个文档');
+                return;
+            }
+
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+            formData.append('instruction', instruction);
+            formData.append('fields', fields);
+
+            // 显示进度条
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressBar').innerText = '0%';
+            document.getElementById('statusMessage').innerText = '正在上传文件...';
+            document.getElementById('resultArea').style.display = 'none';
+
+            try {
+                // 模拟进度动画（真实进度可通过轮询实现，但为了简化，我们使用定时器模拟）
+                let progress = 0;
+                const interval = setInterval(() => {
+                    if (progress < 90) {
+                        progress += 10;
+                        document.getElementById('progressBar').style.width = progress + '%';
+                        document.getElementById('progressBar').innerText = progress + '%';
+                        if (progress === 30) document.getElementById('statusMessage').innerText = '正在解析文档...';
+                        if (progress === 50) document.getElementById('statusMessage').innerText = 'AI正在提取信息...';
+                        if (progress === 70) document.getElementById('statusMessage').innerText = '正在生成表格...';
+                    }
+                }, 500);
+
+                // 发送请求
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                clearInterval(interval);
+                document.getElementById('progressBar').style.width = '100%';
+                document.getElementById('progressBar').innerText = '100%';
+                document.getElementById('statusMessage').innerText = '处理完成！';
+
+                if (response.ok) {
+                    // 检查是否是文件下载
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const data = await response.json();
+                        document.getElementById('resultArea').style.display = 'block';
+                        document.getElementById('resultMessage').innerText = data.message || '处理成功';
+                    } else {
+                        // 是文件下载
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.getElementById('downloadLink');
+                        a.href = url;
+                        a.download = 'filled_form.xlsx';
+                        document.getElementById('resultArea').style.display = 'block';
+                        document.getElementById('resultMessage').innerText = '表格已生成，点击下方按钮下载';
+                    }
+                } else {
+                    const errorData = await response.json();
+                    alert('出错：' + (errorData.error || '未知错误'));
+                }
+            } catch (error) {
+                alert('网络错误：' + error);
+            } finally {
+                // 可隐藏进度条，但保留
+            }
+        }
+    </script>
+</body>
+</html>
