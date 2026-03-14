@@ -1,4 +1,4 @@
-# excel_operator.py - 你负责
+# excel_operator.py 
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.chart import BarChart, Reference
