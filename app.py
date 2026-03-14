@@ -20,7 +20,7 @@ try:
     from document_reader import DocumentReader
     logger.info("成功导入 document_reader.DocumentReader")
     
-    # 创建类的实例（全局使用）
+    #类的实例（全局使用）
     reader = DocumentReader()
     
     def read_documents(file_paths):
