@@ -1,235 +1,180 @@
 """
-A23 智能填表系统 - 主程序
-基于大语言模型的文档理解与多源数据融合系统
+A23 智能填表系统 - Flask 主程序
+适配现有项目结构：document_reader.py, excel_handler.py, ai_module.py, config.py
 """
-
-import streamlit as st
-import pandas as pd
-from docx import Document
-import openai
 import os
-from tempfile import NamedTemporaryFile
-import asyncio
-import aiohttp
-from typing import List, Dict
 import time
+import re
+import logging
+import pandas as pd
+from flask import Flask, render_template, request, send_file, jsonify
+from werkzeug.utils import secure_filename
 
-# 页面配置（必须放在第一行）
-st.set_page_config(
-    page_title="A23 智能填表系统",
-    page_icon="📄",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# ==================== 标题区域 ====================
-st.title("📄 A23 智能填表系统")
-st.markdown("*基于大语言模型的文档理解与多源数据融合系统*")
-st.markdown("---")
-
-# ==================== 侧边栏配置 ====================
-with st.sidebar:
-    st.header("⚙️ 系统配置")
+# ---------- 尝试导入队友模块，失败则使用模拟函数 ----------
+# 文档读取模块(已整合)
+try:
+    from document_reader import DocumentReader
+    logger.info("✅ 成功导入 document_reader.DocumentReader")
     
-    # API配置
-    st.subheader("🤖 大模型配置")
-    api_key = st.text_input("API Key", type="password", 
-                            help="从阿里云/OpenAI获取的API密钥")
+    # 创建类的实例（全局使用）
+    reader = DocumentReader()
     
-    api_base = st.text_input("API Base URL", 
-                            value="https://dashscope.aliyuncs.com/compatible-mode/v1",
-                            help="默认是阿里云通义千问的地址")
-    
-    model = st.selectbox("选择模型", 
-                        ["qwen-plus", "qwen-turbo", "gpt-3.5-turbo", "自定义"],
-                        help="qwen是阿里云模型，gpt需要OpenAI密钥")
-    
-    if model == "自定义":
-        model = st.text_input("输入模型名称", value="qwen-plus")
-    
-    # 高级配置
-    with st.expander("⚡ 高级配置"):
-        max_concurrent = st.slider("最大并发数", 1, 20, 5,
-                                  help="并发请求数越大越快，但可能被API限制")
-        temperature = st.slider("Temperature", 0.0, 1.0, 0.1,
-                               help="值越大回答越随机，值越小越确定")
-    
-    st.markdown("---")
-    st.info("📌 上传文档和Excel模板，系统会自动填表")
-    st.caption("第十七届服创大赛 · A23赛题")
-
-# ==================== 主界面 ====================
-col1, col2 = st.columns(2)
-
-# 左侧：文档上传
-with col1:
-    st.subheader("📁 1. 上传文档")
-    st.caption("支持格式：txt / docx / md / xlsx（作为数据源）")
-    
-    docs = st.file_uploader(
-        "选择文档文件（可多选）",
-        accept_multiple_files=True,
-        type=['txt', 'docx', 'md', 'xlsx']
-    )
-    
-    if docs:
-        st.success(f"✅ 已上传 {len(docs)} 个文件")
-        for doc in docs:
-            file_size = len(doc.getvalue()) / 1024  # KB
-            st.text(f"  • {doc.name} ({file_size:.1f} KB)")
-
-# 右侧：表格上传
-with col2:
-    st.subheader("📊 2. 上传Excel模板")
-    st.caption("模板格式：第一行为表头，第一列为待填项标识")
-    
-    template = st.file_uploader(
-        "选择Excel模板文件",
-        type=['xlsx']
-    )
-    
-    if template:
-        st.success(f"✅ 已上传模板：{template.name}")
-        
-        # 预览模板内容
-        try:
-            # 临时保存文件
-            with NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
-                tmp.write(template.getvalue())
-                tmp_path = tmp.name
-            
-            # 读取Excel
-            df = pd.read_excel(tmp_path)
-            
-            # 清理临时文件
-            os.unlink(tmp_path)
-            
-            st.write("📋 模板预览：")
-            st.dataframe(df.head(5), use_container_width=True)
-            
-            # 显示表格结构
-            st.caption(f"表格大小：{df.shape[0]}行 × {df.shape[1]}列")
-            
-            # 保存到session state供后续使用
-            st.session_state['template_df'] = df
-            st.session_state['template_name'] = template.name
-            
-        except Exception as e:
-            st.error(f"❌ 无法读取Excel文件：{str(e)}")
-
-# ==================== 处理按钮 ====================
-st.markdown("---")
-col_btn, col_status = st.columns([1, 3])
-
-with col_btn:
-    start_btn = st.button("🚀 开始智能填表", type="primary", use_container_width=True)
-
-with col_status:
-    status_placeholder = st.empty()
-
-# ==================== 处理逻辑 ====================
-if start_btn:
-    # 检查必要输入
-    if not docs:
-        st.error("❌ 请先上传文档")
-        st.stop()
-    if not template:
-        st.error("❌ 请先上传Excel模板")
-        st.stop()
-    if not api_key:
-        st.error("❌ 请在侧边栏配置API Key")
-        st.stop()
-    
-    # 开始计时
-    start_time = time.time()
-    
-    # 显示进度
-    progress_bar = st.progress(0, text="准备开始...")
-    status_text = st.empty()
-    
-    try:
-        # ========== 第1步：解析文档 ==========
-        status_text.text("📖 正在解析文档...")
-        progress_bar.progress(10, text="解析文档中...")
-        
+    def read_documents(file_paths):
+        """调用甲的类读取文档"""
         all_text = ""
-        for i, doc in enumerate(docs):
-            # 这里先简单处理，后面会完善
-            status_text.text(f"  处理 {doc.name}...")
-            # 模拟解析时间
-            time.sleep(0.5)
-            all_text += f"[来自文件：{doc.name}]\n"
+        for path in file_paths:
+            logger.info(f"📖 读取文件：{path}")
+            try:
+                # 调用read 方法
+                text = reader.read(path)
+                # 只取前1000字符作为预览，避免日志太长
+                logger.info(f"  读取成功，长度：{len(text)} 字符")
+                all_text += text + "\n"
+            except FileNotFoundError:
+                logger.error(f"❌ 文件不存在：{path}")
+                all_text += f"[文件不存在：{path}]\n"
+            except ValueError as e:
+                logger.error(f"❌ 格式不支持：{e}")
+                all_text += f"[格式不支持：{path}]\n"
+            except Exception as e:
+                logger.error(f"❌ 读取失败：{e}")
+                all_text += f"[读取失败：{path}]\n"
         
-        # ========== 第2步：解析模板 ==========
-        status_text.text("📋 正在分析表格结构...")
-        progress_bar.progress(30, text="分析表格中...")
+        logger.info(f"✅ 所有文件读取完成，总字符数：{len(all_text)}")
+        return all_text
         
-        df = st.session_state.get('template_df')
-        if df is None:
-            st.error("表格数据丢失，请重新上传")
-            st.stop()
-        
-        # 获取表头
-        headers = df.columns.tolist()
-        status_text.text(f"  发现 {len(headers)} 列表头：{', '.join(headers[:3])}...")
-        
-        # ========== 第3步：逐行填表（模拟） ==========
-        status_text.text("🤖 AI正在填表...")
-        progress_bar.progress(50, text="AI处理中...")
-        
-        # 创建结果DataFrame
-        result_df = df.copy()
-        
-        # 逐行处理
-        total_rows = len(df)
-        for idx in range(total_rows):
-            progress = 50 + int(40 * (idx + 1) / total_rows)
-            progress_bar.progress(progress, text=f"正在处理第 {idx+1}/{total_rows} 行...")
-            
-            # 这里先填模拟数据，后面换成真正的AI调用
-            result_df.iloc[idx, 1:] = f"AI生成内容_{idx+1}"
-            
-            # 稍微停顿，看起来在运行
-            time.sleep(0.3)
-        
-        # ========== 第4步：生成结果 ==========
-        status_text.text("💾 正在生成结果文件...")
-        progress_bar.progress(95, text="生成文件中...")
-        
-        # 保存结果到临时文件
-        with NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
-            result_df.to_excel(tmp.name, index=False)
-            result_path = tmp.name
-        
-        # 计算用时
-        elapsed_time = time.time() - start_time
-        
-        # ========== 显示结果 ==========
-        progress_bar.progress(100, text="完成！")
-        status_text.text("")
-        
-        st.success(f"✅ 填表完成！用时 {elapsed_time:.1f} 秒")
-        
-        # 显示结果预览
-        st.subheader("📊 填表结果预览")
-        st.dataframe(result_df.head(10), use_container_width=True)
-        
-        # 下载按钮
-        with open(result_path, 'rb') as f:
-            st.download_button(
-                label="📥 下载填好的Excel",
-                data=f,
-                file_name=f"filled_{st.session_state.get('template_name', 'result.xlsx')}",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        
-        # 清理临时文件
-        os.unlink(result_path)
-        
-    except Exception as e:
-        st.error(f"❌ 处理过程中出错：{str(e)}")
-        progress_bar.empty()
+except ImportError as e:
+    logger.error(f"❌ 导入 document_reader 失败：{e}")
+    logger.warning("使用模拟读取函数")
+    
+    def read_documents(file_paths):
+        """模拟读取文档"""
+        return "模拟文档内容：这是一个测试文档。\n甲方：XX公司\n乙方：YY大学\n金额：10000元"
+# ---------------------------------------------------------
 
-# ==================== 底部 ====================
-st.markdown("---")
-st.caption("© 2025 A23项目组 · 第十七届服创大赛")
+# 表格生成模块
+try:
+    from excel_handler import fill_template as real_fill_template
+    logger.info("成功导入 excel_handler.fill_template")
+except ImportError:
+    logger.warning("导入 excel_handler 失败，使用模拟函数")
+    def real_fill_template(data, output_filename='filled_form.xlsx'):
+        """模拟生成Excel"""
+        df = pd.DataFrame([data])
+        output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
+        df.to_excel(output_path, index=False)
+        return output_path
+
+# AI模块
+try:
+    from ai_module import parse_instruction, extract_entities
+    logger.info("成功导入 ai_module")
+except ImportError:
+    logger.warning("导入 ai_module 失败，使用模拟函数")
+    def parse_instruction(instruction):
+        if '填表' in instruction or '表格' in instruction:
+            return 'fill_form'
+        elif '搜索' in instruction:
+            return 'search'
+        elif '问答' in instruction:
+            return 'ask'
+        else:
+            return 'unknown'
+    
+    def extract_entities(text, targets):
+        result = {}
+        # 简单正则模拟提取
+        if '姓名' in targets:
+            names = re.findall(r'([\u4e00-\u9fa5]{2,3})', text)
+            result['姓名'] = names[0] if names else '张三'
+        if '金额' in targets:
+            money = re.findall(r'(\d+\.?\d*)\s*元', text)
+            result['金额'] = money[0] if money else '1000'
+        if '日期' in targets:
+            dates = re.findall(r'(\d{4}年\d{1,2}月\d{1,2}日)', text)
+            result['日期'] = dates[0] if dates else '2023年1月1日'
+        for t in targets:
+            if t not in result:
+                result[t] = f'示例{t}'
+        return result
+# ---------------------------------------------------------
+
+app = Flask(__name__)
+
+# 配置上传和输出文件夹
+UPLOAD_FOLDER = 'uploads'
+OUTPUT_FOLDER = 'outputs'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/process', methods=['POST'])
+def process():
+    instruction = request.form.get('instruction', '').strip()
+    fields_input = request.form.get('fields', '').strip()
+    uploaded_files = request.files.getlist('files')
+
+    if not uploaded_files or uploaded_files[0].filename == '':
+        return jsonify({'error': '请至少上传一个文件'}), 400
+
+    # 保存文件
+    saved_paths = []
+    for file in uploaded_files:
+        if file.filename == '':
+            continue
+        filename = secure_filename(file.filename)
+        path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(path)
+        saved_paths.append(path)
+
+    # 1. 读取文档（调用真实或模拟函数）
+    all_text = real_read_documents(saved_paths)
+    if not all_text.strip():
+        return jsonify({'error': '无法读取文档内容，请确保上传了支持的格式'}), 400
+
+    # 2. 解析指令意图
+    intent = parse_instruction(instruction)
+    logger.info(f"解析意图: {intent}")
+
+    if intent != 'fill_form':
+        return jsonify({'message': f'当前只演示填表功能，您的意图是：{intent}'}), 200
+
+    # 3. 确定要提取的字段
+    targets = []
+    if fields_input:
+        targets = [f.strip() for f in fields_input.split(',') if f.strip()]
+    else:
+        match = re.search(r'提取(.*)', instruction)
+        if match:
+            fields_str = match.group(1)
+            targets = re.split(r'[和、,，]', fields_str)
+            targets = [t.strip() for t in targets if t.strip()]
+        else:
+            targets = ['姓名', '金额', '日期']
+
+    if not targets:
+        return jsonify({'error': '未指定要提取的字段'}), 400
+
+    # 4. 调用AI提取
+    logger.info(f"开始提取字段: {targets}")
+    extracted = extract_entities(all_text, targets)
+    logger.info(f"提取结果: {extracted}")
+
+    # 5. 生成Excel（调用真实或模拟函数）
+    output_file = real_fill_template(extracted, output_filename='filled_form.xlsx')
+
+    # 6. 返回文件下载
+    return send_file(output_file, as_attachment=True, download_name='filled_form.xlsx')
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
