@@ -2,7 +2,7 @@
 import re
 
 class InstructionParser:
-    """自然语言指令解析器"""
+    """自然语言指令解析器——实现用户对word和excel的操作指令解析"""
     
     def __init__(self):
         # 定义支持的指令模式
