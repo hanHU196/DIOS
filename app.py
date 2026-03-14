@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # 文档读取模块(已整合)
 try:
     from document_reader import DocumentReader
-    logger.info("✅ 成功导入 document_reader.DocumentReader")
+    logger.info("成功导入 document_reader.DocumentReader")
     
     # 创建类的实例（全局使用）
     reader = DocumentReader()
@@ -35,20 +35,20 @@ try:
                 logger.info(f"  读取成功，长度：{len(text)} 字符")
                 all_text += text + "\n"
             except FileNotFoundError:
-                logger.error(f"❌ 文件不存在：{path}")
+                logger.error(f"文件不存在：{path}")
                 all_text += f"[文件不存在：{path}]\n"
             except ValueError as e:
-                logger.error(f"❌ 格式不支持：{e}")
+                logger.error(f"格式不支持：{e}")
                 all_text += f"[格式不支持：{path}]\n"
             except Exception as e:
-                logger.error(f"❌ 读取失败：{e}")
+                logger.error(f"读取失败：{e}")
                 all_text += f"[读取失败：{path}]\n"
         
-        logger.info(f"✅ 所有文件读取完成，总字符数：{len(all_text)}")
+        logger.info(f"所有文件读取完成，总字符数：{len(all_text)}")
         return all_text
         
 except ImportError as e:
-    logger.error(f"❌ 导入 document_reader 失败：{e}")
+    logger.error(f"导入 document_reader 失败：{e}")
     logger.warning("使用模拟读取函数")
     
     def read_documents(file_paths):
