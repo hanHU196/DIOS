@@ -4,10 +4,98 @@ import json
 from flask import Flask, render_template, request, send_file
 from werkzeug.utils import secure_filename
 
-# 导入队友模块（需要确保文件存在）
-import document_reader  # 甲负责：读取文档
-import excel_handler    # 乙负责：处理表格
-import ai_module        # 丁负责：AI 接口
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# ---------- 尝试导入队友模块，失败则使用模拟函数 ----------
+# 文档读取模块(已整合)
+try:
+    from document_reader import DocumentReader
+    logger.info("成功导入 document_reader.DocumentReader")
+    
+    #类的实例（全局使用）
+    reader = DocumentReader()
+    
+    def read_documents(file_paths):
+        """调用甲的类读取文档"""
+        all_text = ""
+        for path in file_paths:
+            logger.info(f"📖 读取文件：{path}")
+            try:
+                # 调用read 方法
+                text = reader.read(path)
+                # 只取前1000字符作为预览，避免日志太长
+                logger.info(f"  读取成功，长度：{len(text)} 字符")
+                all_text += text + "\n"
+            except FileNotFoundError:
+                logger.error(f"文件不存在：{path}")
+                all_text += f"[文件不存在：{path}]\n"
+            except ValueError as e:
+                logger.error(f"格式不支持：{e}")
+                all_text += f"[格式不支持：{path}]\n"
+            except Exception as e:
+                logger.error(f"读取失败：{e}")
+                all_text += f"[读取失败：{path}]\n"
+        
+        logger.info(f"所有文件读取完成，总字符数：{len(all_text)}")
+        return all_text
+        
+except ImportError as e:
+    logger.error(f"导入 document_reader 失败：{e}")
+    logger.warning("使用模拟读取函数")
+    
+    def read_documents(file_paths):
+        """模拟读取文档"""
+        return "模拟文档内容：这是一个测试文档。\n甲方：XX公司\n乙方：YY大学\n金额：10000元"
+# -------------------------------------------------------
+
+# 表格生成模块
+try:
+    from excel_handler import fill_template as real_fill_template
+    logger.info("成功导入 excel_handler.fill_template")
+except ImportError:
+    logger.warning("导入 excel_handler 失败，使用模拟函数")
+    def real_fill_template(data, output_filename='filled_form.xlsx'):
+        """模拟生成Excel"""
+        df = pd.DataFrame([data])
+        output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
+        df.to_excel(output_path, index=False)
+        return output_path
+
+# AI模块
+try:
+    from ai_module import parse_instruction, extract_entities
+    logger.info("成功导入 ai_module")
+except ImportError:
+    logger.warning("导入 ai_module 失败，使用模拟函数")
+    def parse_instruction(instruction):
+        if '填表' in instruction or '表格' in instruction:
+            return 'fill_form'
+        elif '搜索' in instruction:
+            return 'search'
+        elif '问答' in instruction:
+            return 'ask'
+        else:
+            return 'unknown'
+    
+    def extract_entities(text, targets):
+        result = {}
+        # 简单正则模拟提取
+        if '姓名' in targets:
+            names = re.findall(r'([\u4e00-\u9fa5]{2,3})', text)
+            result['姓名'] = names[0] if names else '张三'
+        if '金额' in targets:
+            money = re.findall(r'(\d+\.?\d*)\s*元', text)
+            result['金额'] = money[0] if money else '1000'
+        if '日期' in targets:
+            dates = re.findall(r'(\d{4}年\d{1,2}月\d{1,2}日)', text)
+            result['日期'] = dates[0] if dates else '2023年1月1日'
+        for t in targets:
+            if t not in result:
+                result[t] = f'示例{t}'
+        return result
+# ---------------------------------------------------------
 
 app = Flask(__name__)
 
