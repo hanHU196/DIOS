@@ -1,14 +1,19 @@
-"""
-A23 智能填表系统 - Flask 主程序
-适配现有项目结构：document_reader.py, excel_handler.py, ai_module.py, config.py
-"""
 import os
-import time
 import re
+import json
 import logging
 import pandas as pd
-from flask import Flask, render_template, request, send_file, jsonify
+from flask import Flask, render_template, request, send_file
 from werkzeug.utils import secure_filename
+
+
+# 导入队友模块（需要确保文件存在）
+import document_reader  # 甲负责：读取文档
+import excel_handler    # 乙负责：处理表格
+import ai_module        # 丁负责：AI 接口
+
+
+app = Flask(__name__)
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -58,16 +63,35 @@ except ImportError as e:
 
 # 表格生成模块
 try:
-    from excel_handler import fill_template as real_fill_template
-    logger.info("成功导入 excel_handler.fill_template")
-except ImportError:
-    logger.warning("导入 excel_handler 失败，使用模拟函数")
-    def real_fill_template(data, output_filename='filled_form.xlsx'):
-        """模拟生成Excel"""
-        df = pd.DataFrame([data])
-        output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
-        df.to_excel(output_path, index=False)
-        return output_path
+    import excel_handler  # ✅ 直接导入整个模块
+    logger.info("✅ 成功导入 excel_handler")
+    
+    # 检查关键函数是否存在
+    if not hasattr(excel_handler, 'fill_excel_with_data'):
+        logger.error("excel_handler 缺少 fill_excel_with_data 函数")
+        raise ImportError("缺少必要函数")
+        
+except ImportError as e:
+    logger.error(f"❌ 导入 excel_handler 失败：{e}")
+    logger.warning("使用模拟填表函数")
+    
+    # 创建模拟模块（因为app已经定义，这里可以用app.config）
+    class MockExcelHandler:
+        @staticmethod
+        def fill_excel_with_data(template_path, data_list, output_path):
+            df = pd.DataFrame(data_list)
+            df.to_excel(output_path, index=False)
+            return output_path
+        
+        @staticmethod
+        def MongoDBHandler():
+            class MockMongo:
+                def insert_data(self, *args, **kwargs):
+                    logger.info("模拟MongoDB插入")
+                    return None
+            return MockMongo()
+    
+    excel_handler = MockExcelHandler()  # 用模拟对象替换
 
 # AI模块
 try:
@@ -103,78 +127,181 @@ except ImportError:
         return result
 # ---------------------------------------------------------
 
-app = Flask(__name__)
 
-# 配置上传和输出文件夹
+
+# 配置
 UPLOAD_FOLDER = 'uploads'
-OUTPUT_FOLDER = 'outputs'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+ALLOWED_DOC_EXTENSIONS = {'txt', 'docx', 'md', 'xlsx'}  # 支持的文件类型
+ALLOWED_TEMPLATE_EXTENSIONS =   {'xlsx','xls'}  # 模板文件类型
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 限制16MB
+
+# 确保上传文件夹存在
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename, allowed_set=ALLOWED_DOC_EXTENSIONS):
+    return '.' in filename and  filename.rsplit('.', 1)[1].lower() in allowed_set
+
+def parse_fields_from_instruction(instruction):
+    """
+    从自然语言指令中解析出要提取的字段列表。
+    例如："提取甲方、乙方、金额" -> ["甲方", "乙方", "金额"]
+    如果无法解析，返回空列表。
+    """
+    # 简单规则：查找“提取”后面的内容，按中文顿号、逗号分割
+    match = re.search(r'提取[：:]\s*(.+)', instruction)
+    if not match:
+        match = re.search(r'提取\s*(.+)', instruction)
+    if match:
+        fields_str = match.group(1)
+        # 按中文顿号、逗号、空格分割
+        fields = re.split(r'[、，,\s]+', fields_str)
+        # 过滤空字符串
+        fields = [f.strip() for f in fields if f.strip()]
+        return fields
+    # 如果没有“提取”关键词，尝试将整个指令按标点分割作为字段（不准确，但作为备选）
+    words = re.split(r'[、，,\s]+', instruction)
+    # 只保留可能的中文词（长度≥2且不含数字字母）
+    fields = [w for w in words if len(w) >= 2 and not re.search(r'[a-zA-Z0-9]', w)]
+    return fields
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/process', methods=['POST'])
-def process():
-    instruction = request.form.get('instruction', '').strip()
-    fields_input = request.form.get('fields', '').strip()
-    uploaded_files = request.files.getlist('files')
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    # 获取上传的文件和指令
+    doc_file = request.files.get('document')
+    template_file = request.files.get('template')
+    instruction = request.form.get('command', '').strip()
 
-    if not uploaded_files or uploaded_files[0].filename == '':
-        return jsonify({'error': '请至少上传一个文件'}), 400
+    if not doc_file or not template_file or not instruction:
+        return "请上传文档和模板文件，并输入指令", 400
 
-    # 保存文件
-    saved_paths = []
-    for file in uploaded_files:
-        if file.filename == '':
-            continue
-        filename = secure_filename(file.filename)
-        path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(path)
-        saved_paths.append(path)
+    # 检查文件格式
+    if not allowed_file(doc_file.filename, ALLOWED_DOC_EXTENSIONS):
+        return "文档格式不支持，请上传 txt/docx/md/xlsx 文件", 400
+    if not allowed_file(template_file.filename, ALLOWED_TEMPLATE_EXTENSIONS):
+        return "模板格式不支持，请上传 Excel 文件（.xlsx 或 .xls）", 400
 
-    # 1. 读取文档（调用真实或模拟函数）
-    all_text = real_read_documents(saved_paths)
-    if not all_text.strip():
-        return jsonify({'error': '无法读取文档内容，请确保上传了支持的格式'}), 400
+    # 保存文档
+    doc_filename = secure_filename(doc_file.filename)
+    doc_path = os.path.join(app.config['UPLOAD_FOLDER'], doc_filename)
+    doc_file.save(doc_path)
+    # 保存模板（重命名避免覆盖，确保有.xlsx后缀）
+    template_filename = secure_filename(template_file.filename)
+    # 确保文件名有 .xlsx 后缀
+    if not template_filename.endswith('.xlsx'):
+        template_filename = template_filename + '.xlsx'
+    template_path = os.path.join(app.config['UPLOAD_FOLDER'], 'template_' + template_filename)
+    template_file.save(template_path)
+    logger.info(f"✅ 模板保存为：{template_path}")
 
-    # 2. 解析指令意图
-    intent = parse_instruction(instruction)
-    logger.info(f"解析意图: {intent}")
+    # ---------- 以下为原有流程（调用甲、丁） ----------
+    try:
+        doc_text = document_reader.read_document(doc_path)
+    except Exception as e:
+        return f"读取文档失败：{str(e)}", 500
+
+    try:
+        intent = ai_module.parse_instruction(instruction)
+    except Exception as e:
+        return f"解析指令失败：{str(e)}", 500
 
     if intent != 'fill_form':
-        return jsonify({'message': f'当前只演示填表功能，您的意图是：{intent}'}), 200
+        return f"当前仅支持填表操作，您的指令意图为：{intent}"
+    # ---------- 正确的流程：先用乙解析模板 ----------
+    try:
+        # 1. 先用乙解析模板，得到真正的字段
+        template_fields = excel_handler.parse_excel_template(template_path)
+        logger.info(f"📋 模板字段：{template_fields}")
+    except Exception as e:
+        return f"解析模板失败：{str(e)}", 500
 
-    # 3. 确定要提取的字段
-    targets = []
-    if fields_input:
-        targets = [f.strip() for f in fields_input.split(',') if f.strip()]
+        # 2. 用模板字段去调用AI
+    try:
+        extracted_data = ai_module.extract_entities(doc_text, template_fields)
+        logger.info(f"✅ AI提取结果：{extracted_data}")
+        logger.info(f"提取到 {len(extracted_data)} 行数据")
+    except Exception as e:
+        return f"信息提取失败：{str(e)}", 500
+
+    # 3. 准备数据（extracted_data 现在已经是列表了）
+    if isinstance(extracted_data, list):
+        data_list = extracted_data  # 直接使用
     else:
-        match = re.search(r'提取(.*)', instruction)
-        if match:
-            fields_str = match.group(1)
-            targets = re.split(r'[和、,，]', fields_str)
-            targets = [t.strip() for t in targets if t.strip()]
-        else:
-            targets = ['姓名', '金额', '日期']
+        # 兼容旧版本，如果是字典就包装成列表
+        data_list = [extracted_data]
 
-    if not targets:
-        return jsonify({'error': '未指定要提取的字段'}), 400
+    # 创建输出目录
+    output_dir = "outputs"
+    os.makedirs(output_dir, exist_ok=True)
 
-    # 4. 调用AI提取
-    logger.info(f"开始提取字段: {targets}")
-    extracted = extract_entities(all_text, targets)
-    logger.info(f"提取结果: {extracted}")
+    # 生成唯一输出文件名（避免多人同时使用覆盖）
+    from datetime import datetime
+    output_filename = f"result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    output_path = os.path.join(output_dir, output_filename)
 
-    # 5. 生成Excel（调用真实或模拟函数）
-    output_file = real_fill_template(extracted, output_filename='filled_form.xlsx')
-
-    # 6. 返回文件下载
-    return send_file(output_file, as_attachment=True, download_name='filled_form.xlsx')
+    # 先填表（必须成功）
+    # ===== 调试信息 =====
+    print("\n" + "="*60)
+    print("🔍 表格生成调试信息")
+    print("="*60)
+    print(f"1. 模板路径：{template_path}")
+    print(f"2. 模板是否存在：{os.path.exists(template_path)}")
+    if os.path.exists(template_path):
+        print(f"3. 文件大小：{os.path.getsize(template_path)} 字节")
+        print(f"4. 文件权限：可读？{os.access(template_path, os.R_OK)}")
+        
+        # 尝试用 openpyxl 直接读取
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(template_path)
+            print(f"✅ openpyxl 能正常读取")
+            print(f"工作表：{wb.sheetnames}")
+            ws = wb.active
+            print(f"表头：{[cell.value for cell in ws[1]]}")
+        except Exception as e:
+            print(f"❌ openpyxl 读取失败：{e}")
+            
+            # 用 pandas 再试试
+            try:
+                import pandas as pd
+                df = pd.read_excel(template_path)
+                print(f"✅ pandas 能读取")
+                print(f"列名：{df.columns.tolist()}")
+            except Exception as e2:
+                print(f"❌ pandas 也读取失败：{e2}")
+    print(f"5. 数据列表：{data_list}")
+    print(f"6. 输出路径：{output_path}")
+    print(f"7. 输出目录是否存在：{os.path.exists(os.path.dirname(output_path))}")
+    print("="*60 + "\n")
+    # ===== 调试信息结束 =====
+    
+    try:
+        # 在调用 fill_excel_with_data 之前
+        print("\n" + "="*60)
+        print("🔍 传递给乙的数据检查")
+        print("="*60)
+        print(f"data_list 类型：{type(data_list)}")
+        print(f"data_list 长度：{len(data_list)}")
+        if len(data_list) > 0:
+            print(f"第一行数据：{data_list[0]}")
+            if len(data_list) > 1:
+                print(f"第二行数据：{data_list[1]}")
+        print("="*60 + "\n")
+        excel_handler.fill_excel_with_data(template_path, data_list, output_path)
+        logger.info(f"✅ Excel生成成功：{output_path}")
+    except Exception as e:
+        import traceback
+        error_msg = str(e)
+        error_detail = traceback.format_exc()
+        logger.error(f"生成表格失败：{error_msg}")
+        logger.error(f"详细错误：{error_detail}")
+        return f"生成表格失败：{error_msg}", 500
+    # 返回文件下载
+    return send_file(output_path, as_attachment=True, download_name='result.xlsx')
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True)

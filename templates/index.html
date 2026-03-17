@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档智能处理系统 </title>
+    
+    <!-- Bootstrap 5 样式 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .simple-card {
+            max-width: 800px;
+            margin: 40px auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        
+        .body {
+            padding: 30px;
+        }
+        
+        .upload-box {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            background: #f8f9fa;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        
+        .upload-box:hover {
+            border-color: #667eea;
+            background: #f0f3ff;
+        }
+        
+        .upload-box i {
+            font-size: 40px;
+            color: #667eea;
+        }
+        
+        .file-info {
+            background: #e8f5e9;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            display: none;
+        }
+        
+        .file-info.show {
+            display: block;
+        }
+        
+        .btn-process {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 1.2rem;
+            font-weight: 500;
+            width: 100%;
+            transition: all 0.3s;
+        }
+        
+        .btn-process:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+        
+        .btn-process:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .progress {
+            height: 30px;
+            border-radius: 15px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .progress.show {
+            display: flex;
+        }
+        
+        .result-box {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .result-box.show {
+            display: block;
+        }
+        
+        .badge-required {
+            background: #ff4444;
+            color: white;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="simple-card">
+        <div class="header">
+            <h1>文档智能处理系统</h1>
+            <p class="mb-0">上传文档 → 上传模板 → 自动填表</p>
+        </div>
+        
+        <div class="body">
+            <!-- 文档上传 -->
+            <div class="mb-4">
+                <label class="form-label fw-bold">
+                    1. 选择文档文件 <span class="badge-required">必选</span>
+                </label>
+                <div class="upload-box" id="docUploadBox">
+                    <i>📄</i>
+                    <h6>点击或拖拽上传文档</h6>
+                    <small class="text-muted">支持 .txt .docx .md .xlsx .pdf</small>
+                    <input type="file" id="docInput" style="display: none;" 
+                           accept=".txt,.docx,.md,.xlsx,.pdf">
+                </div>
+                
+                <!-- 文档信息 -->
+                <div class="file-info" id="docInfo">
+                    <div class="d-flex align-items-center">
+                        <span style="font-size: 24px; margin-right: 15px;">📄</span>
+                        <div style="flex: 1">
+                            <strong id="docName"></strong>
+                            <br>
+                            <small class="text-muted" id="docSize"></small>
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger" onclick="clearDoc()">✕ 移除</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 模板上传 -->
+            <div class="mb-4">
+                <label class="form-label fw-bold">
+                    2. 选择Excel模板 <span class="badge-required">必选</span>
+                </label>
+                <div class="upload-box" id="templateUploadBox">
+                    <i>📊</i>
+                    <h6>点击或拖拽上传模板</h6>
+                    <small class="text-muted">支持 .xlsx .xls</small>
+                    <input type="file" id="templateInput" style="display: none;" 
+                           accept=".xlsx,.xls">
+                </div>
+                
+                <!-- 模板信息 -->
+                <div class="file-info" id="templateInfo">
+                    <div class="d-flex align-items-center">
+                        <span style="font-size: 24px; margin-right: 15px;">📊</span>
+                        <div style="flex: 1">
+                            <strong id="templateName"></strong>
+                            <br>
+                            <small class="text-muted" id="templateSize"></small>
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger" onclick="clearTemplate()">✕ 移除</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 指令输入（可选） -->
+            <div class="mb-4">
+                <label class="form-label fw-bold">3. 输入指令（可选）</label>
+                <input type="text" class="form-control" id="commandInput" 
+                       placeholder="例如：提取甲方、乙方、金额" value="提取所有数据填表">
+                <small class="text-muted">不填则使用默认指令</small>
+            </div>
+            
+            <!-- 进度条 -->
+            <div class="progress" id="progressBar">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                     id="progress" style="width: 0%">0%</div>
+            </div>
+            
+            <!-- 处理按钮 -->
+            <button class="btn-process" id="processBtn" onclick="processFile()" disabled>
+                🚀 开始处理
+            </button>
+            
+            <!-- 结果区域 -->
+            <div class="result-box" id="resultBox">
+                <h5 class="mb-3">✅ 处理完成</h5>
+                
+                <div class="alert alert-success" id="successMessage" style="display: none;">
+                    文件生成成功！
+                </div>
+                
+                <div class="alert alert-danger" id="errorMessage" style="display: none;"></div>
+                
+                <div class="text-center mt-3">
+                    <a href="#" class="btn btn-success btn-lg" id="downloadLink" style="display: none;">
+                        📥 下载生成的Excel
+                    </a>
+                    <button class="btn btn-outline-primary mt-2" onclick="resetForm()">
+                        ↺ 重新上传
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center text-muted py-3 border-top">
+            <small>接口: /upload | 支持格式: txt/docx/md/xlsx/pdf</small>
+        </div>
+    </div>
+    
+    <script>
+        // DOM 元素
+        const docUploadBox = document.getElementById('docUploadBox');
+        const docInput = document.getElementById('docInput');
+        const docInfo = document.getElementById('docInfo');
+        const docName = document.getElementById('docName');
+        const docSize = document.getElementById('docSize');
+        
+        const templateUploadBox = document.getElementById('templateUploadBox');
+        const templateInput = document.getElementById('templateInput');
+        const templateInfo = document.getElementById('templateInfo');
+        const templateName = document.getElementById('templateName');
+        const templateSize = document.getElementById('templateSize');
+        
+        const processBtn = document.getElementById('processBtn');
+        const progressBar = document.getElementById('progressBar');
+        const progress = document.getElementById('progress');
+        const resultBox = document.getElementById('resultBox');
+        const successMessage = document.getElementById('successMessage');
+        const errorMessage = document.getElementById('errorMessage');
+        const downloadLink = document.getElementById('downloadLink');
+        
+        // 状态
+        let selectedDoc = null;
+        let selectedTemplate = null;
+        
+        // ===== 文档上传 =====
+        docUploadBox.addEventListener('click', () => docInput.click());
+        
+        docUploadBox.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            docUploadBox.style.borderColor = '#667eea';
+            docUploadBox.style.background = '#f0f3ff';
+        });
+        
+        docUploadBox.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            docUploadBox.style.borderColor = '#ddd';
+            docUploadBox.style.background = '#f8f9fa';
+        });
+        
+        docUploadBox.addEventListener('drop', (e) => {
+            e.preventDefault();
+            docUploadBox.style.borderColor = '#ddd';
+            docUploadBox.style.background = '#f8f9fa';
+            
+            const file = e.dataTransfer.files[0];
+            if (file) handleDocSelect(file);
+        });
+        
+        docInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleDocSelect(file);
+        });
+        
+        function handleDocSelect(file) {
+            selectedDoc = file;
+            docName.textContent = file.name;
+            docSize.textContent = formatFileSize(file.size);
+            docInfo.classList.add('show');
+            checkCanProcess();
+        }
+        
+        window.clearDoc = function() {
+            selectedDoc = null;
+            docInput.value = '';
+            docInfo.classList.remove('show');
+            checkCanProcess();
+        };
+        
+        // ===== 模板上传 =====
+        templateUploadBox.addEventListener('click', () => templateInput.click());
+        
+        templateUploadBox.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            templateUploadBox.style.borderColor = '#667eea';
+            templateUploadBox.style.background = '#f0f3ff';
+        });
+        
+        templateUploadBox.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            templateUploadBox.style.borderColor = '#ddd';
+            templateUploadBox.style.background = '#f8f9fa';
+        });
+        
+        templateUploadBox.addEventListener('drop', (e) => {
+            e.preventDefault();
+            templateUploadBox.style.borderColor = '#ddd';
+            templateUploadBox.style.background = '#f8f9fa';
+            
+            const file = e.dataTransfer.files[0];
+            if (file) handleTemplateSelect(file);
+        });
+        
+        templateInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleTemplateSelect(file);
+        });
+        
+        function handleTemplateSelect(file) {
+            // 检查是否是Excel
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (!['xlsx', 'xls'].includes(ext)) {
+                alert('请上传Excel文件（.xlsx 或 .xls）');
+                return;
+            }
+            
+            selectedTemplate = file;
+            templateName.textContent = file.name;
+            templateSize.textContent = formatFileSize(file.size);
+            templateInfo.classList.add('show');
+            checkCanProcess();
+        }
+        
+        window.clearTemplate = function() {
+            selectedTemplate = null;
+            templateInput.value = '';
+            templateInfo.classList.remove('show');
+            checkCanProcess();
+        };
+        
+        // ===== 工具函数 =====
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function checkCanProcess() {
+            processBtn.disabled = !(selectedDoc && selectedTemplate);
+        }
+        
+        function resetForm() {
+            clearDoc();
+            clearTemplate();
+            resultBox.classList.remove('show');
+            progressBar.classList.remove('show');
+            downloadLink.style.display = 'none';
+            successMessage.style.display = 'none';
+            errorMessage.style.display = 'none';
+        }
+        
+        // ===== 处理文件 =====
+        async function processFile() {
+            if (!selectedDoc || !selectedTemplate) {
+                alert('请先选择文档和模板');
+                return;
+            }
+            
+            // 显示进度条
+            progressBar.classList.add('show');
+            progress.style.width = '0%';
+            progress.textContent = '0%';
+            
+            // 禁用按钮
+            processBtn.disabled = true;
+            
+            // 隐藏之前的结果
+            resultBox.classList.remove('show');
+            downloadLink.style.display = 'none';
+            
+            try {
+                // 模拟进度
+                let percent = 0;
+                const interval = setInterval(() => {
+                    if (percent < 90) {
+                        percent += 10;
+                        progress.style.width = percent + '%';
+                        progress.textContent = percent + '%';
+                    }
+                }, 300);
+                
+                // 创建 FormData
+                const formData = new FormData();
+                formData.append('document', selectedDoc);
+                formData.append('template', selectedTemplate);
+                
+                const command = document.getElementById('commandInput').value;
+                formData.append('command', command);
+                
+                // 发送请求
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                clearInterval(interval);
+                progress.style.width = '100%';
+                progress.textContent = '100%';
+                
+                // 显示结果区域
+                resultBox.classList.add('show');
+                
+                if (response.ok) {
+                    // 检查是否是Excel文件
+                    const contentType = response.headers.get('content-type');
+                    
+                    if (contentType && contentType.includes('application/vnd.openxmlformats-officedocument')) {
+                        // 是Excel文件，创建下载链接
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        
+                        downloadLink.href = url;
+                        downloadLink.download = 'filled_form.xlsx';
+                        downloadLink.style.display = 'inline-block';
+                        
+                        successMessage.style.display = 'block';
+                        errorMessage.style.display = 'none';
+                        successMessage.textContent = '✅ 表格生成成功！点击下方按钮下载';
+                    } else {
+                        // 可能是JSON响应
+                        const data = await response.json();
+                        successMessage.style.display = 'block';
+                        errorMessage.style.display = 'none';
+                        successMessage.textContent = data.message || '处理成功';
+                        
+                        // 如果有下载链接
+                        if (data.download_url) {
+                            downloadLink.href = data.download_url;
+                            downloadLink.style.display = 'inline-block';
+                        }
+                    }
+                } else {
+                    // 错误处理
+                    const errorText = await response.text();
+                    errorMessage.style.display = 'block';
+                    successMessage.style.display = 'none';
+                    errorMessage.textContent = errorText || '处理失败';
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                
+                progress.style.width = '100%';
+                progress.textContent = '失败';
+                
+                resultBox.classList.add('show');
+                errorMessage.style.display = 'block';
+                successMessage.style.display = 'none';
+                errorMessage.textContent = '网络错误：' + error.message;
+            } finally {
+                processBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
