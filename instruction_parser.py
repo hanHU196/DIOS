@@ -1,8 +1,8 @@
-# instruction_parser.py 
+# instruction_parser.py
 import re
 
 class InstructionParser:
-    """自然语言指令解析器——实现用户对word和excel的操作指令解析"""
+    """自然语言指令解析器"""
     
     def __init__(self):
         # 定义支持的指令模式
@@ -44,12 +44,20 @@ class InstructionParser:
         result = {'operations': []}
         
         # 处理加粗
-        if re.search(self.patterns['bold'], instruction, re.I):
+        if re.search(self.patterns['bold'], instruction, re.IGNORECASE):
             # 判断是加粗标题还是全文
             if '标题' in instruction:
                 result['operations'].append({'type': 'bold', 'target': 'title'})
             else:
                 result['operations'].append({'type': 'bold', 'target': 'all'})
+        
+        # 处理斜体
+        if re.search(self.patterns['italic'], instruction, re.IGNORECASE):
+            result['operations'].append({'type': 'italic'})
+        
+        # 处理下划线
+        if re.search(self.patterns['underline'], instruction, re.IGNORECASE):
+            result['operations'].append({'type': 'underline'})
         
         # 处理字体大小
         size_match = re.search(self.patterns['font_size'], instruction)
@@ -60,8 +68,16 @@ class InstructionParser:
             })
         
         # 处理居中
-        if re.search(self.patterns['center'], instruction, re.I):
+        if re.search(self.patterns['center'], instruction, re.IGNORECASE):
             result['operations'].append({'type': 'center'})
+        
+        # 处理左对齐
+        if re.search(self.patterns['left'], instruction, re.IGNORECASE):
+            result['operations'].append({'type': 'left'})
+        
+        # 处理右对齐
+        if re.search(self.patterns['right'], instruction, re.IGNORECASE):
+            result['operations'].append({'type': 'right'})
         
         # 处理插入表格
         table_match = re.search(self.patterns['insert_table'], instruction)
@@ -71,6 +87,22 @@ class InstructionParser:
                 'rows': int(table_match.group(1)),
                 'cols': int(table_match.group(2))
             })
+        
+        # 处理Excel加粗表头
+        if re.search(self.patterns['excel_bold'], instruction, re.IGNORECASE):
+            result['operations'].append({'type': 'excel_bold'})
+        
+        # 处理Excel列宽
+        width_match = re.search(self.patterns['excel_width'], instruction)
+        if width_match:
+            result['operations'].append({
+                'type': 'excel_width',
+                'size': int(width_match.group(1))
+            })
+        
+        # 处理Excel求和
+        if re.search(self.patterns['excel_sum'], instruction, re.IGNORECASE):
+            result['operations'].append({'type': 'excel_sum'})
         
         return result
     
@@ -93,10 +125,18 @@ if __name__ == "__main__":
         "字体大小16，插入3x4表格",
         "加粗表头，列宽15",
         "提取甲方、乙方、金额",
+        "斜体并加下划线",
+        "求和",
     ]
+    
+    print("="*50)
+    print("指令解析器测试")
+    print("="*50)
     
     for inst in test_instructions:
         result = parser.parse(inst)
-        print(f"指令：{inst}")
-        print(f"解析：{result}")
-        print()
+        print(f"\n📝 指令：{inst}")
+        print(f"🔍 解析：{result}")
+    
+    print("\n" + "="*50)
+    print("测试完成")

@@ -9,21 +9,35 @@ from pymongo import MongoClient
 
 
 # Excel 工具函数
+# 解析 Excel 模板，返回字段列表
 def parse_excel_template(template_path):
     df = pd.read_excel(template_path, nrows=0)
     return df.columns.tolist()
 
+# 填充 Excel 模板
 def fill_excel_with_data(template_path, data, output_path):
+    """填充 Excel 模板（支持多行数据）"""
+    from openpyxl import load_workbook
+    
     wb = load_workbook(template_path)
     ws = wb.active
+    
+    # 获取表头（第一行）
     headers = [cell.value for cell in ws[1]]
+    print(f"📋 表头：{headers}")
+    print(f"📊 数据行数：{len(data)}")
+    
+    # 如果只有表头，从第二行开始添加数据
     for row_idx, record in enumerate(data, start=2):
+        print(f"  写入第 {row_idx} 行：{record}")
         for col_idx, header in enumerate(headers, start=1):
-            ws.cell(row=row_idx, column=col_idx, value=record.get(header, ''))
+            value = record.get(header, '')
+            ws.cell(row=row_idx, column=col_idx, value=value)
+    
     wb.save(output_path)
-    print(f"Excel 文件已生成：{output_path}")
-
+    print(f"✅ Excel 文件已生成：{output_path}，共 {len(data)} 行数据")
 # Word 工具函数
+# 替换段落中的占位符
 def replace_placeholders_in_paragraph(paragraph, data):
     """遍历 runs 替换占位符，保留样式"""
     for run in paragraph.runs:
@@ -34,6 +48,7 @@ def replace_placeholders_in_paragraph(paragraph, data):
                 text = text.replace(placeholder, str(value))
         run.text = text
 
+# 替换表格中的占位符
 def replace_placeholders_in_table(table, data):
     """替换表格单元格中的占位符"""
     for row in table.rows:
@@ -41,6 +56,7 @@ def replace_placeholders_in_table(table, data):
             for paragraph in cell.paragraphs:
                 replace_placeholders_in_paragraph(paragraph, data)
 
+# 填充 Word 模板
 def fill_word_with_data(template_path, data_records, output_dir, filename_prefix="output"):
     os.makedirs(output_dir, exist_ok=True)
     for idx, record in enumerate(data_records):

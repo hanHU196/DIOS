@@ -10,12 +10,10 @@ logger = logging.getLogger(__name__)
 # 初始化客户端
 client = ZhipuAI(api_key=ZHIPU_API_KEY)
 
-def extract_entities(text: str, targets: list = None) -> dict:
+def extract_entities(text: str, targets: list = None) -> list:
     """
     从文本中提取指定的字段值。
-    :param text: 输入文本
-    :param targets: 要提取的字段列表，例如 ["甲方", "乙方", "金额"]。如果为 None 或空列表，默认提取 ["人名", "金额"]。
-    :return: 字典，键为字段名，值为提取的值。例如 {"甲方":"张三", "金额":"1000元"}
+    返回列表，每个元素是一个字典
     """
     if targets is None or len(targets) == 0:
         targets = ["人名", "金额"]
@@ -24,50 +22,85 @@ def extract_entities(text: str, targets: list = None) -> dict:
     
     prompt = f"""
     请从以下文本中提取以下字段的值：{target_str}。
-    必须以JSON对象形式返回，键是字段名，值是提取的内容。**绝对不要返回数组（列表）**，只能返回一个对象。
-    例如：{{"{targets[0]}": "张三"}}
+    
+    文本中包含多个条目，请提取**所有条目**。
+    
+    要求：
+    1. 必须以JSON数组形式返回，每个数组元素是一个对象，包含所有字段
+    2. 如果某个字段在条目中不存在，填null
+    3. 不要有其他文字，只返回JSON数组
+    
+    例如：
+    [
+      {{"{targets[0]}": "值1", "{targets[1]}": "值2"}},
+      {{"{targets[0]}": "值3", "{targets[1]}": "值4"}}
+    ]
     
     文本内容：
     {text}
     
-    只返回JSON对象，不要有其他文字。
+    只返回JSON数组，不要有其他文字。
     """
     try:
         logger.info(f"调用AI接口提取字段（目标：{target_str}）...")
         response = client.chat.completions.create(
-            model="glm-4",  # 如果不可用，可改为 glm-3-turbo
+            model="glm-4-flash",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
-            max_tokens=1000,
+            max_tokens=16000,  # 增加token数
         )
         result_text = response.choices[0].message.content.strip()
-        logger.info(f"AI返回原始内容: {result_text}")
+        logger.info(f"AI返回原始内容长度: {len(result_text)}")
         
         # 尝试解析JSON
         try:
             result = json.loads(result_text)
-        except json.JSONDecodeError:
-            # 如果解析失败，用正则提取第一个 {} 或 [] 的内容
-            match = re.search(r'(\{.*\}|\[.*\])', result_text, re.DOTALL)
-            if match:
-                result = json.loads(match.group())
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict):
+                return [result]
             else:
-                raise ValueError("无法找到JSON")
-        
-        # 如果返回的是列表，转换成字典（假设列表元素是 {"type":..., "value":...} 格式）
-        if isinstance(result, list):
-            dict_result = {}
-            for item in result:
-                if isinstance(item, dict) and "type" in item and "value" in item:
-                    dict_result[item["type"]] = item["value"]
-            return dict_result
-        elif isinstance(result, dict):
-            return result
-        else:
-            return {}
+                logger.error(f"返回类型错误: {type(result)}")
+                return []
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON解析失败: {e}")
+            
+            # 尝试用正则提取数组
+            match = re.search(r'(\[.*\])', result_text, re.DOTALL)
+            if match:
+                try:
+                    result = json.loads(match.group())
+                    if isinstance(result, list):
+                        logger.info(f"正则提取成功，获取到 {len(result)} 条数据")
+                        return result
+                except:
+                    pass
+            
+            # 如果还是失败，尝试修复不完整的JSON
+            logger.warning("尝试修复不完整的JSON...")
+            # 去掉末尾不完整的内容
+            if result_text.rstrip().endswith(','):
+                result_text = result_text.rstrip()[:-1] + "]"
+            elif not result_text.rstrip().endswith(']'):
+                # 找到最后一个完整的对象
+                last_brace = result_text.rfind('}')
+                if last_brace > 0:
+                    result_text = result_text[:last_brace+1] + "]"
+            
+            try:
+                result = json.loads(result_text)
+                if isinstance(result, list):
+                    logger.info(f"修复成功，获取到 {len(result)} 条数据")
+                    return result
+            except:
+                pass
+            
+            logger.error("无法修复JSON")
+            return []
+            
     except Exception as e:
         logger.error(f"出错: {e}")
-        return {}
+        return []
 
 def parse_instruction(instruction: str) -> str:
     """

@@ -38,6 +38,9 @@ class DocumentReader:
         # 打印初始化成功信息
         print("✅ 文档读取器初始化成功！支持格式：", list(self.supported_formats.keys()))
     
+    def read_document(self, file_path):
+        """兼容旧代码的别名方法"""
+        return self.read(file_path)
     # 统一入口函数
     def read(self, file_path):
         """
@@ -367,6 +370,12 @@ class DocumentReader:
             print(f"❌ 保存失败：{e}")
             return False
 
+
+# 在文件末尾添加这个模块级别的函数
+def read_document(file_path):
+    """模块级别的函数，供 app.py 直接调用"""
+    reader = DocumentReader()
+    return reader.read(file_path)
 
 # ===== 交互式测试代码 =====
 if __name__ == "__main__":
