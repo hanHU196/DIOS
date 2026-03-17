@@ -7,150 +7,183 @@ from config import ZHIPU_API_KEY
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 初始化客户端
 client = ZhipuAI(api_key=ZHIPU_API_KEY)
 
-def extract_entities(text: str, targets: list = None) -> list:
+def extract_entities(text: str, targets: list) -> dict:
     """
     从文本中提取指定的字段值。
-    返回列表，每个元素是一个字典
+    :param text: 输入文本
+    :param targets: 要提取的字段列表，例如 ["甲方", "乙方", "金额"]。如果为空或无效，返回空字典。
+    :return: 字典，键为字段名，值为提取的值。
     """
-    if targets is None or len(targets) == 0:
-        targets = ["人名", "金额"]
+    if not isinstance(targets, list) or len(targets) == 0:
+        logger.error("targets 必须为非空列表")
+        return {}
     
     target_str = "、".join(targets)
     
+    # 构造示例，避免索引越界
+    if len(targets) >= 2:
+        example = f'{{"{targets[0]}": "值1", "{targets[1]}": "值2"}}'
+    else:
+        example = f'{{"{targets[0]}": "值1"}}'
+    
     prompt = f"""
-    请从以下文本中提取以下字段的值：{target_str}。
+    你是一个信息提取助手。请从以下文本中提取以下字段的值：{target_str}。
+    必须以**严格的JSON对象**形式返回，键是字段名，值是提取的内容。**绝对不要返回数组（列表）**。
+    如果某个字段在文本中不存在，则值为null。
     
-    文本中包含多个条目，请提取**所有条目**。
-    
-    要求：
-    1. 必须以JSON数组形式返回，每个数组元素是一个对象，包含所有字段
-    2. 如果某个字段在条目中不存在，填null
-    3. 不要有其他文字，只返回JSON数组
-    
-    例如：
-    [
-      {{"{targets[0]}": "值1", "{targets[1]}": "值2"}},
-      {{"{targets[0]}": "值3", "{targets[1]}": "值4"}}
-    ]
+    例如：{example}
     
     文本内容：
     {text}
     
-    只返回JSON数组，不要有其他文字。
+    只返回JSON对象，不要有任何其他文字、注释或标记。
     """
+    
     try:
         logger.info(f"调用AI接口提取字段（目标：{target_str}）...")
-        response = client.chat.completions.create(
-            model="glm-4-flash",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=16000,  # 增加token数
-        )
-        result_text = response.choices[0].message.content.strip()
-        logger.info(f"AI返回原始内容长度: {len(result_text)}")
-        
-        # 尝试解析JSON
-        try:
-            result = json.loads(result_text)
-            if isinstance(result, list):
-                return result
-            elif isinstance(result, dict):
-                return [result]
-            else:
-                logger.error(f"返回类型错误: {type(result)}")
-                return []
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON解析失败: {e}")
-            
-            # 尝试用正则提取数组
-            match = re.search(r'(\[.*\])', result_text, re.DOTALL)
-            if match:
-                try:
-                    result = json.loads(match.group())
-                    if isinstance(result, list):
-                        logger.info(f"正则提取成功，获取到 {len(result)} 条数据")
-                        return result
-                except:
-                    pass
-            
-            # 如果还是失败，尝试修复不完整的JSON
-            logger.warning("尝试修复不完整的JSON...")
-            # 去掉末尾不完整的内容
-            if result_text.rstrip().endswith(','):
-                result_text = result_text.rstrip()[:-1] + "]"
-            elif not result_text.rstrip().endswith(']'):
-                # 找到最后一个完整的对象
-                last_brace = result_text.rfind('}')
-                if last_brace > 0:
-                    result_text = result_text[:last_brace+1] + "]"
-            
-            try:
-                result = json.loads(result_text)
-                if isinstance(result, list):
-                    logger.info(f"修复成功，获取到 {len(result)} 条数据")
-                    return result
-            except:
-                pass
-            
-            logger.error("无法修复JSON")
-            return []
-            
-    except Exception as e:
-        logger.error(f"出错: {e}")
-        return []
-
-def parse_instruction(instruction: str) -> str:
-    """
-    解析用户指令，返回意图名称。
-    可能的意图: "fill_form" (填表), "search" (搜索), "ask" (问答), "unknown" (未知)
-    """
-    prompt = f"""
-    你是一个智能助手，需要理解用户的指令并分类到以下类别之一：
-    - fill_form: 用户希望根据文档内容填写表格或生成汇总表格。
-    - search: 用户想搜索文档中的信息。
-    - ask: 用户对文档内容提问。
-    - unknown: 无法确定意图。
-    
-    用户指令："{instruction}"
-    
-    请只返回一个单词作为类别，不要有其他解释文字。
-    """
-    try:
-        logger.info("调用AI接口解析指令...")
         response = client.chat.completions.create(
             model="glm-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
-            max_tokens=10,
+            max_tokens=1000,
         )
-        intent = response.choices[0].message.content.strip().lower()
-        if intent in ["fill_form", "search", "ask"]:
-            return intent
+        result_text = response.choices[0].message.content.strip()
+        logger.info(f"AI返回原始内容: {result_text}")
+        
+        result = None
+        try:
+            result = json.loads(result_text)
+        except json.JSONDecodeError:
+            match = re.search(r'(\{.*\}|\[.*\])', result_text, re.DOTALL)
+            if match:
+                try:
+                    result = json.loads(match.group())
+                except json.JSONDecodeError:
+                    pass
+        
+        if isinstance(result, list):
+            dict_result = {}
+            for item in result:
+                if isinstance(item, dict) and "type" in item and "value" in item:
+                    dict_result[item["type"]] = item["value"]
+                elif isinstance(item, dict) and len(item) == 1:
+                    for k, v in item.items():
+                        dict_result[k] = v
+            return dict_result
+        elif isinstance(result, dict):
+            return result
+        elif result is not None:
+            return {"value": result}
         else:
-            return "unknown"
+            return {}
+    except Exception as e:
+        logger.error(f"出错: {e}")
+        return {}
+
+def parse_instruction(instruction: str) -> dict:
+    """
+    解析用户指令，返回包含意图和操作参数的字典。
+    """
+    prompt = f"""
+    你是一个智能助手，需要理解用户的指令并返回结构化的解析结果。
+
+    可能的意图类型：
+    - fill_form: 用户希望根据文档内容填写表格或生成汇总表格
+    - search: 用户想搜索文档中的信息
+    - ask: 用户对文档内容提问
+    - operate: 用户希望对文档进行编辑、排版、格式调整、内容提取等操作
+    - unknown: 无法确定意图
+
+    如果是 operate 意图，还需要识别具体的操作类型和参数。操作类型包括：
+
+    【Word 操作】
+    - bold: 加粗（用户可能说：加粗、粗体、bold）
+    - italic: 斜体（斜体、italic）
+    - underline: 下划线（下划线、underline）
+    - center: 居中对齐（居中、居中对齐、center）
+    - left: 左对齐（左对齐、left）
+    - right: 右对齐（右对齐、right）
+    - font_size: 设置字体大小，需要提取 size 参数（数字），例如“字体大小设为12”
+    - insert_table: 插入表格，需要提取 rows 和 cols 参数（数字），例如“插入3行4列表格”
+    - insert_image: 插入图片（例如“插入图片”）
+
+    【Excel 操作】
+    - excel_bold: 加粗表头或标题（例如“加粗表头”、“加粗标题”）
+    - excel_center: 居中（Excel 单元格居中，例如“单元格居中”）
+    - excel_width: 设置列宽，需要提取 width 参数（数字），例如“列宽设为15”
+    - excel_sum: 求和或合计（例如“求和”、“合计”）
+    - excel_chart: 插入图表（例如“插入图表”）
+
+    【通用操作】
+    - extract: 提取内容，需要提取 target 参数（要提取什么），例如“提取所有姓名”、“提取日期”
+    - fill: 填表或填写（例如“填表”、“填写”）
+
+    请以 JSON 格式返回，包含 intent 字段，如果是 operate 意图，还需要包含 action 和必要的参数字段。
+
+    示例：
+    指令："帮我填一下这个表格" -> {{"intent": "fill_form"}}
+    指令："查找关于张三的信息" -> {{"intent": "search"}}
+    指令："文档里说了什么" -> {{"intent": "ask"}}
+    指令："把标题加粗" -> {{"intent": "operate", "action": "bold", "target": "标题"}}
+    指令："设置字体大小为12" -> {{"intent": "operate", "action": "font_size", "size": 12}}
+    指令："插入3行4列表格" -> {{"intent": "operate", "action": "insert_table", "rows": 3, "cols": 4}}
+    指令："加粗表头" -> {{"intent": "operate", "action": "excel_bold"}}
+    指令："列宽设为15" -> {{"intent": "operate", "action": "excel_width", "width": 15}}
+    指令："求和" -> {{"intent": "operate", "action": "excel_sum"}}
+    指令："提取所有姓名" -> {{"intent": "operate", "action": "extract", "target": "姓名"}}
+    指令："今天天气怎么样" -> {{"intent": "unknown"}}
+
+    用户指令："{instruction}"
+
+    只返回 JSON 对象，不要有其他文字。
+    """
+    try:
+        response = client.chat.completions.create(
+            model="glm-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=300,
+        )
+        result_text = response.choices[0].message.content.strip()
+        logger.info(f"解析指令原始返回: {result_text}")
+        
+        try:
+            result = json.loads(result_text)
+        except json.JSONDecodeError:
+            match = re.search(r'(\{.*\})', result_text, re.DOTALL)
+            if match:
+                result = json.loads(match.group())
+            else:
+                raise
+        return result
     except Exception as e:
         logger.error(f"解析指令出错: {e}")
-        return "unknown"
+        return {"intent": "unknown"}
 
 if __name__ == "__main__":
-    # 测试实体抽取
     sample_text = "张三向李四借款1000元，于2023年5月1日归还。"
     
-    print("默认抽取（人名、金额）：", extract_entities(sample_text))
+    print("默认抽取（人名、金额）：", extract_entities(sample_text, ["人名", "金额"]))
     print("只抽取人名：", extract_entities(sample_text, ["人名"]))
     print("抽取人名、日期：", extract_entities(sample_text, ["人名", "日期"]))
     print("抽取自定义类型：", extract_entities(sample_text, ["借款人", "借款金额"]))
     
-    # 测试指令解析
+    print("传入空列表：", extract_entities(sample_text, []))
+    
     test_instructions = [
         "帮我填一下这个表格",
         "查找关于张三的信息",
         "文档里说了什么",
+        "把标题加粗",
+        "设置字体大小为14",
+        "插入2行3列表格",
+        "加粗表头",
+        "列宽设为20",
+        "求和",
+        "提取所有日期",
         "今天天气怎么样"
     ]
     for inst in test_instructions:
-        print(f"指令 '{inst}' -> 意图: {parse_instruction(inst)}")
-    
+        print(f"指令 '{inst}' -> 解析结果: {parse_instruction(inst)}")
