@@ -7,6 +7,7 @@ from docx import Document
 import pandas as pd
 import markdown
 import re
+import zipfile
 from pathlib import Path
 
 # 强制标准输出使用UTF-8
@@ -51,7 +52,7 @@ class DocumentReader:
         """
         # 1. 检查文件是否存在
         if not os.path.exists(file_path):
-            raise FileNotFoundError(f"文件不存在：{file_path}")
+            raise FileNotFoundError(f"File not found: {file_path}")
         
         # 2. 获取文件后缀
         ext = os.path.splitext(file_path)[1].lower()
@@ -159,34 +160,10 @@ class DocumentReader:
             return f"❌ CSV读取失败：{str(e)}"
     
     def _read_docx(self, file_path):
-        """读取Word文档 - 使用PaddleOCR识别图片"""
+        """读取Word文档 - 无OCR版本（只返回图片位置信息）"""
         try:
             from docx import Document
-            import zipfile
-            import os
-            import tempfile
-            from PIL import Image
-            import io
             
-            # 导入PaddleOCR
-            try:
-                from paddleocr import PaddleOCR
-                # 初始化OCR（只在第一次调用时下载模型）
-                print("  🔍 正在初始化PaddleOCR（首次运行会下载模型，请稍候）...")
-                ocr = PaddleOCR(
-                    use_angle_cls=True,      # 启用方向分类
-                    lang='ch',                # 中文识别
-                    show_log=False,           # 不显示详细日志
-                    use_gpu=False             # 如果您有GPU可设为True
-                )
-                ocr_available = True
-                print("  ✅ PaddleOCR初始化成功")
-            except ImportError:
-                print("  ⚠️ PaddleOCR未安装，请运行: pip install paddleocr")
-                ocr_available = False
-            except Exception as e:
-                print(f"  ⚠️ PaddleOCR初始化失败: {e}")
-                ocr_available = False
             
             # 打开Word文档
             doc = Document(file_path)
@@ -204,7 +181,6 @@ class DocumentReader:
             result.append(f"\n【段落内容】（共{len(paragraphs)}段）")
             result.append("-"*40)
             for i, para in enumerate(paragraphs, 1):
-                # 如果段落太长，只显示前200字符作为预览（但完整内容会保存）
                 if len(para) > 200:
                     result.append(f"{i}. {para[:200]}...（共{len(para)}字符）")
                 else:
@@ -221,106 +197,27 @@ class DocumentReader:
                         if row_cells:
                             result.append(" | ".join(row_cells))
             
-            # 提取并识别图片
+            # 检测图片数量（不识别内容）
             result.append("\n【图片内容】")
             result.append("-"*40)
             
-            # 方法1：通过rels提取图片
             image_count = 0
-            recognized_texts = []
-            
             for rel in doc.part.rels.values():
                 if "image" in rel.reltype:
-                    try:
-                        image_count += 1
-                        image_data = rel.target_part.blob
-                        
-                        # 使用PIL打开图片
-                        image = Image.open(io.BytesIO(image_data))
-                        
-                        # 保存为临时文件（PaddleOCR需要文件路径）
-                        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-                            image.save(tmp_file, format='PNG')
-                            tmp_path = tmp_file.name
-                        
-                        result.append(f"\n📷 图片 {image_count}:")
-                        result.append(f"  图片大小: {image.size}")
-                        
-                        # OCR识别
-                        if ocr_available:
-                            print(f"    正在识别图片{image_count}...")
-                            
-                            # 调用PaddleOCR识别
-                            ocr_result = ocr.ocr(tmp_path, cls=True)
-                            
-                            if ocr_result and ocr_result[0]:
-                                result.append("  识别文字:")
-                                # 遍历识别结果
-                                for line in ocr_result[0]:
-                                    # line格式: [ [[坐标], (文本, 置信度)] ]
-                                    text = line[1][0]  # 识别出的文本
-                                    confidence = line[1][1]  # 置信度
-                                    if text.strip():
-                                        result.append(f"    {text} (置信度: {confidence:.2f})")
-                                        recognized_texts.append(text)
-                            else:
-                                result.append("  未识别到文字")
-                        
-                        # 清理临时文件
-                        os.unlink(tmp_path)
-                        
-                    except Exception as e:
-                        result.append(f"  图片处理失败: {str(e)}")
+                    image_count += 1
             
-            # 方法2：通过解压方式提取所有图片（备用）
-            if image_count == 0:
-                result.append("\n尝试备用方法提取图片...")
-                try:
-                    with zipfile.ZipFile(file_path, 'r') as docx_zip:
-                        for file_name in docx_zip.namelist():
-                            if file_name.startswith('word/media/'):
-                                image_count += 1
-                                image_data = docx_zip.read(file_name)
-                                
-                                # 保存临时文件
-                                ext = os.path.splitext(file_name)[1] or '.png'
-                                with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp_file:
-                                    tmp_file.write(image_data)
-                                    tmp_path = tmp_file.name
-                                
-                                result.append(f"\n📷 图片 {image_count} ({os.path.basename(file_name)}):")
-                                
-                                if ocr_available:
-                                    print(f"    正在识别图片{image_count}...")
-                                    ocr_result = ocr.ocr(tmp_path, cls=True)
-                                    
-                                    if ocr_result and ocr_result[0]:
-                                        result.append("  识别文字:")
-                                        for line in ocr_result[0]:
-                                            text = line[1][0]
-                                            confidence = line[1][1]
-                                            if text.strip():
-                                                result.append(f"    {text} (置信度: {confidence:.2f})")
-                                                recognized_texts.append(text)
-                                    else:
-                                        result.append("  未识别到文字")
-                                
-                                os.unlink(tmp_path)
-                except Exception as e:
-                    result.append(f"  解压提取失败: {str(e)}")
-            
-            if image_count == 0:
-                result.append("  未找到图片")
+            if image_count > 0:
+                result.append(f"  文档中包含 {image_count} 张图片（图片内容未识别）")
             else:
-                result.append(f"\n共识别到 {len(recognized_texts)} 条文字数据")
+                result.append("  未找到图片")
             
             return '\n'.join(result)
             
         except Exception as e:
             import traceback
             return f"❌ Word读取失败：{str(e)}\n{traceback.format_exc()}"
-           
-        
+            
+            
     def _read_pdf(self, file_path):
         """读取PDF文件 - 完整内容"""
         try:
