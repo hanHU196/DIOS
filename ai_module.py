@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 client = ZhipuAI(api_key=ZHIPU_API_KEY)
 
-logger.info(f"提取文本长度: {len(text)}，前100字符: {text[:100]}")
+
 def extract_entities(text: str, targets: list) -> list:
     """
     从文本中提取指定的字段值，返回列表，每个元素是一个字典（对应一条记录）。
@@ -17,6 +17,7 @@ def extract_entities(text: str, targets: list) -> list:
     :param targets: 要提取的字段列表，例如 ["甲方", "乙方", "金额"]。如果为空或无效，返回空列表。
     :return: 列表，如 [{"甲方":"张三","金额":"1000元"}, ...]
     """
+    logger.info(f"提取文本长度: {len(text)}，前100字符: {text[:100]}")
     if not isinstance(targets, list) or len(targets) == 0:
         logger.error("targets 必须为非空列表")
         return []
