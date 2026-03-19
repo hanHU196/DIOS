@@ -9,16 +9,17 @@ logger = logging.getLogger(__name__)
 
 client = ZhipuAI(api_key=ZHIPU_API_KEY)
 
-def extract_entities(text: str, targets: list) -> dict:
+logger.info(f"提取文本长度: {len(text)}，前100字符: {text[:100]}")
+def extract_entities(text: str, targets: list) -> list:
     """
-    从文本中提取指定的字段值。
+    从文本中提取指定的字段值，返回列表，每个元素是一个字典（对应一条记录）。
     :param text: 输入文本
-    :param targets: 要提取的字段列表，例如 ["甲方", "乙方", "金额"]。如果为空或无效，返回空字典。
-    :return: 字典，键为字段名，值为提取的值。
+    :param targets: 要提取的字段列表，例如 ["甲方", "乙方", "金额"]。如果为空或无效，返回空列表。
+    :return: 列表，如 [{"甲方":"张三","金额":"1000元"}, ...]
     """
     if not isinstance(targets, list) or len(targets) == 0:
         logger.error("targets 必须为非空列表")
-        return {}
+        return []
     
     target_str = "、".join(targets)
     
@@ -30,15 +31,23 @@ def extract_entities(text: str, targets: list) -> dict:
     
     prompt = f"""
     你是一个信息提取助手。请从以下文本中提取以下字段的值：{target_str}。
-    必须以**严格的JSON对象**形式返回，键是字段名，值是提取的内容。**绝对不要返回数组（列表）**。
-    如果某个字段在文本中不存在，则值为null。
+
+    文本中包含多个条目，请提取**所有条目**。
     
-    例如：{example}
+    要求：
+    1. 必须以 JSON **数组**形式返回，每个数组元素是一个对象，包含所有字段。
+    2. 如果某个字段在文本中不存在，则值为 null。
+    
+    例如：
+    [
+      {example},
+      {example}
+    ]
     
     文本内容：
     {text}
     
-    只返回JSON对象，不要有任何其他文字、注释或标记。
+    只返回 JSON 数组，不要有任何其他文字、注释或标记。
     """
     
     try:
@@ -56,31 +65,48 @@ def extract_entities(text: str, targets: list) -> dict:
         try:
             result = json.loads(result_text)
         except json.JSONDecodeError:
-            match = re.search(r'(\{.*\}|\[.*\])', result_text, re.DOTALL)
+            match = re.search(r'(\[.*\]|\{.*\})', result_text, re.DOTALL)
             if match:
                 try:
                     result = json.loads(match.group())
                 except json.JSONDecodeError:
                     pass
         
+        # 确保返回列表
         if isinstance(result, list):
-            dict_result = {}
-            for item in result:
-                if isinstance(item, dict) and "type" in item and "value" in item:
-                    dict_result[item["type"]] = item["value"]
-                elif isinstance(item, dict) and len(item) == 1:
-                    for k, v in item.items():
-                        dict_result[k] = v
-            return dict_result
-        elif isinstance(result, dict):
             return result
-        elif result is not None:
-            return {"value": result}
+        elif isinstance(result, dict):
+            # 如果是单个对象，包装成列表
+            return [result]
         else:
-            return {}
+            return []
     except Exception as e:
         logger.error(f"出错: {e}")
-        return {}
+        return []
+def extract_entities_safe(text: str, targets: list) -> list:
+    """
+    安全提取：自动处理大文件
+    """
+    MAX_LENGTH = 10000  # 每段最大字符数
+
+    if len(text) > MAX_LENGTH:
+        paragraphs = text.split('\n')
+        all_results = []
+        current_chunk = ""
+        for para in paragraphs:
+            if len(current_chunk) + len(para) < MAX_LENGTH:
+                current_chunk += para + '\n'
+            else:
+                if current_chunk:
+                    result = extract_entities(current_chunk, targets)
+                    all_results.extend(result)  # 直接 extend
+                current_chunk = para + '\n'
+        if current_chunk:
+            result = extract_entities(current_chunk, targets)
+            all_results.extend(result)
+        return all_results
+    else:
+        return extract_entities(text, targets)
 
 def parse_instruction(instruction: str) -> dict:
     """
