@@ -3,9 +3,13 @@ import sys
 
 import pandas as pd
 from docx import Document
-from flask import Flask, request, send_file
+from flask import Flask, request, send_file, jsonify
 from openpyxl import load_workbook
 from pymongo import MongoClient
+from ai_module import extract_entities
+from dotenv import load_dotenv
+from bson import json_util
+import json
 
 
 # Excel 工具函数
@@ -151,11 +155,27 @@ class MongoDBHandler:
         self.client = MongoClient(uri)
         self.db = self.client[db_name]
 
-    def insert_data(self, collection_name, data):
-        coll = self.db[collection_name]
+    def insert_data(self, data, type_field="type"):
+        """根据数据中的 type_field 字段自动选择集合插入。"""
         if isinstance(data, list):
-            return coll.insert_many(data).inserted_ids
+            # 按 type 分组
+            groups = {}
+            for item in data:
+                coll_name = item.get(type_field)
+                if not coll_name:
+                    raise ValueError(f"数据缺少字段 '{type_field}'，无法确定集合")
+                groups.setdefault(coll_name, []).append(item)
+            inserted_ids = []
+            for coll_name, items in groups.items():
+                coll = self.db[coll_name]
+                result = coll.insert_many(items)
+                inserted_ids.extend(result.inserted_ids)
+            return inserted_ids
         else:
+            coll_name = data.get(type_field)
+            if not coll_name:
+                raise ValueError(f"数据缺少字段 '{type_field}'，无法确定集合")
+            coll = self.db[coll_name]
             return coll.insert_one(data).inserted_id
 
     def query_data(self, collection_name, query=None):
@@ -248,6 +268,76 @@ def create_app():
             return send_file(out_file, as_attachment=True)
         else:
             return "No data provided", 400
+
+    @app.route('/api/query', methods=['POST'])
+    def query_data():
+        """根据传入的查询条件从 MongoDB 查询数据"""
+        req_data = request.get_json()
+        if not req_data:
+            return jsonify({"error": "请求体必须为 JSON"}), 400
+
+        collection_name = req_data.get('collection')
+        if not collection_name:
+            return jsonify({"error": "必须提供 collection 名称"}), 400
+
+        query = req_data.get('query', {})
+        limit = req_data.get('limit', 0)  # 0 表示不限制
+        skip = req_data.get('skip', 0)
+
+        # 实例化数据库处理器（使用默认连接参数，可改进为从环境变量读取）
+        db_handler = MongoDBHandler()
+        cursor = db_handler.db[collection_name].find(query).skip(skip)
+        if limit > 0:
+            cursor = cursor.limit(limit)
+
+        results = []
+        for doc in cursor:
+            # 将 ObjectId 转为字符串
+            doc['_id'] = str(doc['_id'])
+            results.append(doc)
+
+        # 使用 json_util 处理特殊类型（如日期），但我们已经手动转换了 _id
+        return app.response_class(
+            response=json.dumps(results, default=json_util.default),
+            status=200,
+            mimetype='application/json'
+        )
+
+    @app.route('/api/collections', methods=['GET'])
+    def list_collections():
+        """列出数据库中的所有集合"""
+        db_handler = MongoDBHandler()
+        collections = db_handler.db.list_collection_names()
+        return jsonify(collections)
+
+    @app.route('/api/insert', methods=['POST'])
+    def api_insert():
+        """
+        请求体 JSON 格式：
+        {
+            "collection": "air_quality",   # 可选，如果提供则直接存入该集合
+            "data": {...} 或 [...]         # 要插入的数据
+        }
+        如果不提供 collection，则尝试根据数据中的 "type" 字段自动判断。
+        """
+        req_data = request.get_json()
+        if not req_data or 'data' not in req_data:
+            return jsonify({"error": "请求体必须包含 data 字段"}), 400
+
+        data = req_data['data']
+        collection_name = req_data.get('collection')
+
+        db_handler = MongoDBHandler()
+        try:
+            if collection_name:
+                # 直接存入指定集合
+                ids = db_handler.insert_data_into_collection(collection_name, data)
+            else:
+                # 自动判断（使用方案1的 type 字段）
+                ids = db_handler.insert_data(data)  # 需要提前定义好 insert_data 自动判断逻辑
+            return jsonify({"inserted_ids": [str(id) for id in (ids if isinstance(ids, list) else [ids])]})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
 
     return app
 
