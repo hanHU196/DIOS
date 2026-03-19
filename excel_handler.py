@@ -3,11 +3,12 @@ import sys
 
 import pandas as pd
 from docx import Document
-from flask import Flask, request, send_file
+from flask import Flask, request, send_file, jsonify
 from openpyxl import load_workbook
 from pymongo import MongoClient
 from ai_module import extract_entities
 from dotenv import load_dotenv
+from bson import json_util
 
 
 # Excel 工具函数
@@ -153,7 +154,7 @@ class MongoDBHandler:
         self.client = MongoClient(uri)
         self.db = self.client[db_name]
 
-        def insert_data(self, data, type_field="type"):
+    def insert_data(self, data, type_field="type"):
         """根据数据中的 type_field 字段自动选择集合插入。"""
         if isinstance(data, list):
             # 按 type 分组
@@ -267,7 +268,7 @@ def create_app():
         else:
             return "No data provided", 400
 
-@app.route('/api/query', methods=['POST'])
+    @app.route('/api/query', methods=['POST'])
     def query_data():
         """根据传入的查询条件从 MongoDB 查询数据"""
         req_data = request.get_json()
