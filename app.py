@@ -26,10 +26,12 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def allowed_file(filename, allowed_set=ALLOWED_DOC_EXTENSIONS):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_set
 
+# 首页
 @app.route('/')
 def index():
     return render_template('index.html')
 
+# 文件上传和处理接口
 @app.route('/upload', methods=['POST'])
 def upload_file():
     # 获取上传的文件和指令
@@ -87,6 +89,7 @@ def upload_file():
         logger.error(f"处理异常：{e}")
         return f"处理异常：{str(e)}", 500
 
+# 智能指令操作接口（批处理）
 @app.route('/batch_process', methods=['POST'])
 def batch_process():
     """批量处理多个模板"""
@@ -166,6 +169,7 @@ def batch_process():
     logger.info(f"✅ 批处理完成，成功：{success_count}/{len(results)}")
     return jsonify(response)
 
+# 智能指令操作接口（检索）
 @app.route('/search', methods=['POST'])
 def search_documents():
     """文档检索接口"""
@@ -198,6 +202,7 @@ def search_documents():
         'count': len(results)
     })
 
+# 智能指令操作接口（文档处理）
 @app.route('/operate', methods=['POST'])
 def operate_document():
     """智能指令操作文档"""
@@ -223,6 +228,7 @@ def operate_document():
     else:
         return jsonify({'error': result['error']}), 400
 
+# 文档匹配并填表接口
 @app.route('/match_and_fill', methods=['POST'])
 def match_and_fill():
     """先匹配文档，再填表"""

@@ -15,13 +15,14 @@ logger = logging.getLogger(__name__)
 
 class DocumentProcessor:
     """统一处理器：串联甲乙丁"""
-    
+
     def __init__(self):
         self.reader = DocumentReader()
         self.matcher = DocumentMatcher()  # 初始化匹配器
         self.operator = InstructionOperator()
         print("✅ 文档处理器初始化成功")
     
+    # 处理单个文档
     def process_single(self, doc_path, template_path, output_path, instruction=None):
         """处理单个文档"""
         try:
@@ -86,6 +87,8 @@ class DocumentProcessor:
         except Exception as e:
             logger.error(f"处理失败：{e}")
             return {'success': False, 'error': str(e)}
+   
+    # 批量处理多个模板
     def process_batch(self, doc_paths, template_paths, output_dir):
         """批量处理多个模板，每个模板找最佳匹配文档填表"""
         
@@ -136,6 +139,8 @@ class DocumentProcessor:
                 })
         
         return results
+    
+    # 智能指令操作文档
     def operate_document(self, file_path, instruction):
 
         """执行指令操作文档（带AI理解）"""
@@ -159,6 +164,7 @@ class DocumentProcessor:
             
         return result
     
+    # 文档检索接口
     def search_documents(self, query, doc_paths):
         """检索文档"""
         # 先建立索引
@@ -166,6 +172,9 @@ class DocumentProcessor:
         # 执行搜索
         results = self.matcher.search(query)
         return results
+    
+    
+    # 文档匹配并填表接口
     def process_with_matching(self, template_path, doc_paths, output_path, instruction=None):
         """先匹配最佳文档，再用该文档填表"""
         

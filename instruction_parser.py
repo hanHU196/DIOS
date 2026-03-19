@@ -1,4 +1,5 @@
 # instruction_parser.py
+# 解析智能指令并执行操作
 import re
 from docx import Document
 from docx.shared import Pt, Inches
