@@ -1,7 +1,7 @@
 import os
 import re
 import logging
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file,jsonify
 from werkzeug.utils import secure_filename
 from processor import DocumentProcessor
 
@@ -87,5 +87,83 @@ def upload_file():
         logger.error(f"处理异常：{e}")
         return f"处理异常：{str(e)}", 500
 
+@app.route('/batch_process', methods=['POST'])
+def batch_process():
+    """批量处理多个模板"""
+    import json
+    from datetime import datetime
+    
+    # 获取上传的多个文档和多个模板
+    doc_files = request.files.getlist('documents')
+    template_files = request.files.getlist('templates')
+    
+    if not doc_files or not template_files:
+        return jsonify({'error': '请上传文档和模板文件'}), 400
+    
+    # 保存所有文档
+    doc_paths = []
+    for doc_file in doc_files:
+        doc_filename = secure_filename(doc_file.filename)
+        doc_path = os.path.join(app.config['UPLOAD_FOLDER'], doc_filename)
+        doc_file.save(doc_path)
+        doc_paths.append(doc_path)
+        logger.info(f"✅ 文档已保存：{doc_filename}")
+    
+    # 保存所有模板
+    template_paths = []
+    for template_file in template_files:
+        template_filename = secure_filename(template_file.filename)
+        # 确保文件名有 .xlsx 后缀（如果是Excel）
+        if template_filename.endswith('.xlsx') or template_filename.endswith('.xls'):
+            template_path = os.path.join(app.config['UPLOAD_FOLDER'], 'template_' + template_filename)
+        else:
+            # 其他格式（如docx）保持原样
+            template_path = os.path.join(app.config['UPLOAD_FOLDER'], 'template_' + template_filename)
+        template_file.save(template_path)
+        template_paths.append(template_path)
+        logger.info(f"✅ 模板已保存：{template_filename}")
+    
+    # 创建输出目录
+    batch_dir = f"batch_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    output_dir = os.path.join('outputs', batch_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 先建立文档索引
+    logger.info("📚 开始建立文档索引...")
+    processor.matcher.index_documents(doc_paths)
+    
+    # 执行批处理
+    logger.info("🚀 开始批量处理...")
+    results = processor.process_batch(doc_paths, template_paths, output_dir)
+    
+    # 统计结果
+    success_count = sum(1 for r in results if r['success'])
+    
+    response = {
+        'success': True,
+        'batch_dir': batch_dir,
+        'stats': {
+            'total': len(results),
+            'success': success_count,
+            'failed': len(results) - success_count
+        },
+        'results': []
+    }
+    
+    # 整理结果（避免路径过长）
+    for r in results:
+        result_item = {
+            'template_name': os.path.basename(r['template']),
+            'success': r['success']
+        }
+        if r['success']:
+            result_item['matched_doc'] = r.get('matched_doc', '')
+            result_item['output_file'] = os.path.basename(r['output_path'])
+        else:
+            result_item['error'] = r.get('error', '未知错误')
+        response['results'].append(result_item)
+    
+    logger.info(f"✅ 批处理完成，成功：{success_count}/{len(results)}")
+    return jsonify(response)
 if __name__ == '__main__':
     app.run(debug=True)
