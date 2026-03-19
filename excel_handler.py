@@ -9,6 +9,7 @@ from pymongo import MongoClient
 from ai_module import extract_entities
 from dotenv import load_dotenv
 from bson import json_util
+import json
 
 
 # Excel 工具函数
