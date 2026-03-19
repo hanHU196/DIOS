@@ -6,6 +6,8 @@ from document_reader import DocumentReader
 from excel_handler import fill_excel_with_data, parse_excel_template
 from ai_module import extract_entities
 from search_engine import DocumentMatcher  # 导入匹配器
+from ai_module import parse_instruction  # 导入指令解析函数
+from instruction_parser import InstructionOperator
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -17,6 +19,7 @@ class DocumentProcessor:
     def __init__(self):
         self.reader = DocumentReader()
         self.matcher = DocumentMatcher()  # 初始化匹配器
+        self.operator = InstructionOperator()
         print("✅ 文档处理器初始化成功")
     
     def process_single(self, doc_path, template_path, output_path, instruction=None):
@@ -133,3 +136,54 @@ class DocumentProcessor:
                 })
         
         return results
+    def operate_document(self, file_path, instruction):
+
+        """执行指令操作文档（带AI理解）"""
+        
+            # 1. AI理解指令
+        command = parse_instruction(instruction)
+            
+            # 判断是否理解失败
+        if command.get('intent') == 'unknown':
+            return {'success': False, 'error': '无法理解您的指令'}
+            
+            # 2. 构建标准化指令
+        std_command = {
+            'operation': command.get('action'),
+            'target': command.get('target', 'all'),
+            'parameters': command
+            }
+            
+            # 3. 执行标准化指令
+        result = self.operator.execute_standard(std_command, file_path)
+            
+        return result
+    
+    def search_documents(self, query, doc_paths):
+        """检索文档"""
+        # 先建立索引
+        self.matcher.index_documents(doc_paths)
+        # 执行搜索
+        results = self.matcher.search(query)
+        return results
+    def process_with_matching(self, template_path, doc_paths, output_path, instruction=None):
+        """先匹配最佳文档，再用该文档填表"""
+        
+        # 1. 建立文档库索引
+        self.matcher.index_documents(doc_paths)
+        
+        # 2. 为模板找到最佳匹配文档
+        best_match = self.matcher.match_template(template_path)
+        
+        if not best_match:
+            return {'success': False, 'error': '没有找到匹配的文档'}
+        
+        logger.info(f"🎯 使用文档：{best_match['filename']} 填表")
+        
+        # 3. 用最佳文档填表
+        return self.process_single(
+            doc_path=best_match['path'],
+            template_path=template_path,
+            output_path=output_path,
+            instruction=instruction
+        )

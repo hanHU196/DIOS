@@ -165,5 +165,117 @@ def batch_process():
     
     logger.info(f"✅ 批处理完成，成功：{success_count}/{len(results)}")
     return jsonify(response)
+
+@app.route('/search', methods=['POST'])
+def search_documents():
+    """文档检索接口"""
+    data = request.get_json()
+    query = data.get('query', '').strip()
+    
+    if not query:
+        return jsonify({'error': '请输入搜索关键词'}), 400
+    
+    # 获取要检索的文档（检索 uploads 文件夹下的所有文件）
+    import os
+    upload_folder = app.config['UPLOAD_FOLDER']
+    doc_paths = []
+    if os.path.exists(upload_folder):
+        for filename in os.listdir(upload_folder):
+            file_path = os.path.join(upload_folder, filename)
+            if os.path.isfile(file_path):
+                doc_paths.append(file_path)
+    
+    if not doc_paths:
+        return jsonify({'error': '没有可检索的文档'}), 400
+    
+    # 执行检索
+    results = processor.search_documents(query, doc_paths)
+    
+    return jsonify({
+        'success': True,
+        'query': query,
+        'results': results,
+        'count': len(results)
+    })
+
+@app.route('/operate', methods=['POST'])
+def operate_document():
+    """智能指令操作文档"""
+    
+    file = request.files.get('file')
+    instruction = request.form.get('instruction', '').strip()
+    
+    if not file or not instruction:
+        return jsonify({'error': '请上传文件并输入指令'}), 400
+    
+    # 保存文件
+    filename = secure_filename(file.filename)
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(file_path)
+    
+    # 执行操作
+    result = processor.operate_document(file_path, instruction)
+    
+    if result['success']:
+        # 返回修改后的文件
+        return send_file(file_path, as_attachment=True, 
+                        download_name=f'operated_{filename}')
+    else:
+        return jsonify({'error': result['error']}), 400
+
+@app.route('/match_and_fill', methods=['POST'])
+def match_and_fill():
+    """先匹配文档，再填表"""
+    
+    # 获取上传的多个文档和单个模板
+    doc_files = request.files.getlist('documents')
+    template_file = request.files.get('template')
+    instruction = request.form.get('command', '').strip()
+    
+    if not doc_files or not template_file:
+        return jsonify({'error': '请上传文档库和模板文件'}), 400
+    
+    # 保存所有文档
+    doc_paths = []
+    for doc_file in doc_files:
+        doc_filename = secure_filename(doc_file.filename)
+        doc_path = os.path.join(app.config['UPLOAD_FOLDER'], doc_filename)
+        doc_file.save(doc_path)
+        doc_paths.append(doc_path)
+    
+    # 保存模板
+    template_filename = secure_filename(template_file.filename)
+    if not template_filename.endswith('.xlsx'):
+        template_filename = template_filename + '.xlsx'
+    template_path = os.path.join(app.config['UPLOAD_FOLDER'], 'template_' + template_filename)
+    template_file.save(template_path)
+    
+    # 创建输出目录
+    from datetime import datetime
+    output_filename = f"matched_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    output_path = os.path.join('outputs', output_filename)
+    
+    # 调用匹配填表
+    try:
+        result = processor.process_with_matching(
+            template_path=template_path,
+            doc_paths=doc_paths,
+            output_path=output_path,
+            instruction=instruction
+        )
+        
+        if result['success']:
+            return send_file(output_path, as_attachment=True, 
+                           download_name='matched_result.xlsx')
+        else:
+            return jsonify({'error': result.get('error', '未知错误')}), 500
+            
+    except Exception as e:
+        logger.error(f"处理异常：{e}")
+        return jsonify({'error': str(e)}), 500
+
+
+
+
 if __name__ == '__main__':
     app.run(debug=True)
