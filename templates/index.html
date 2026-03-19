@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>A23 智能填表系统</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* ---------- 色彩系统：瑞士极简主义 · 克制而温暖的中性色调 ---------- */
+        :root {
+            --pure-white: #FFFFFF;
+            --snow-white: #F9FAFB;      /* 背景基底，极浅灰 */
+            --mist-gray: #F2F4F6;        /* 卡片/分割线，若有若无 */
+            --stone-50: #E9ECEF;
+            --stone-100: #DEE2E6;
+            --stone-300: #ADB5BD;        /* 次要文字、图标 */
+            --stone-500: #6C757D;        /* 主要文字，低对比度彰显宁静 */
+            --graphite: #2B2F36;          /* 标题/重点，深邃而不生硬 */
+            --accent-sand: #C7B9A5;       /* 唯一点缀色，取自未经打磨的石灰岩，温暖克 *制 */
+            --accent-sand-light: #E5DED3;
+            --shadow-color: rgba(0, 0, 0, 0.02);
+            --shadow-hover: rgba(0, 0, 0, 0.04);
+            /* 间距系统 (8的倍数，呼吸感) */
+            --space-xs: 0.5rem;   /* 8px */
+            --space-sm: 1rem;     /* 16px */
+            --space-md: 1.5rem;   /* 24px */
+            --space-lg: 2.5rem;   /* 40px */
+            --space-xl: 4rem;     /* 64px */
+            --space-2xl: 6rem;    /* 96px */
+            /* 圆角 */
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 24px;
+            /* 过渡 */
+            --transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Inter", system-ui, -apple-system, sans-serif;
+            background-color: var(--snow-white);
+            color: var(--stone-500);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--space-md);
+        }
+
+        /* 主容器 */
+        .spa-container {
+            max-width: 1280px;
+            width: 100%;
+            margin: 0 auto;
+            background: var(--pure-white);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 25px 50px -12px var(--shadow-color), 0 0 0 1px var(--mist-gray) inset;
+            overflow: hidden;
+            backdrop-filter: blur(2px);
+        }
+
+        /* 头部：极轻的边界，仅用字体粗细区分层级 */
+        .spa-header {
+            padding: var(--space-lg) var(--space-xl);
+            border-bottom: 1px solid var(--mist-gray);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: var(--space-sm);
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .icon-mark {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            background: var(--accent-sand-light);
+            border-radius: var(--radius-sm);
+            color: var(--graphite);
+            font-size: 1.25rem;
+        }
+
+        .title h1 {
+            font-size: 1.75rem;
+            font-weight: 350;
+            letter-spacing: -0.02em;
+            color: var(--graphite);
+            line-height: 1.2;
+        }
+
+        .title .sub {
+            font-size: 0.875rem;
+            font-weight: 400;
+            color: var(--stone-300);
+            margin-top: 2px;
+        }
+
+        .badge {
+            background: var(--mist-gray);
+            border-radius: 40px;
+            padding: 0.3rem 1rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--stone-500);
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+
+        /* 网格布局：完美间距 */
+        .spa-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: var(--space-lg);
+            padding: var(--space-xl);
+        }
+
+        /* 卡片——纯净，无边框，仅靠内阴影和垂直韵律区分 */
+        .virtue-card {
+            background: var(--pure-white);
+            border-radius: var(--radius-md);
+            padding: var(--space-lg);
+            transition: var(--transition);
+            box-shadow: 0 4px 12px var(--shadow-color);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .virtue-card:hover {
+            box-shadow: 0 20px 30px -10px var(--shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            border-bottom: 1px solid var(--mist-gray);
+            padding-bottom: var(--space-sm);
+            margin-bottom: var(--space-xs);
+        }
+
+        .card-header i {
+            font-size: 1.4rem;
+            color: var(--accent-sand);
+            width: 32px;
+            text-align: center;
+        }
+
+        .card-header h2 {
+            font-size: 1.2rem;
+            font-weight: 500;
+            color: var(--graphite);
+            letter-spacing: -0.01em;
+        }
+
+        .card-header span {
+            font-size: 0.75rem;
+            background: var(--mist-gray);
+            padding: 0.2rem 0.6rem;
+            border-radius: 30px;
+            margin-left: auto;
+            color: var(--stone-500);
+        }
+
+        /* 上传区域 */
+        .upload-zone {
+            border: 1.5px dashed var(--stone-100);
+            border-radius: var(--radius-md);
+            background: var(--snow-white);
+            padding: var(--space-md) var(--space-sm);
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--accent-sand);
+            background: var(--pure-white);
+        }
+
+        .upload-zone i {
+            font-size: 2rem;
+            color: var(--stone-300);
+            margin-bottom: var(--space-xs);
+            transition: var(--transition);
+        }
+
+        .upload-zone:hover i {
+            color: var(--accent-sand);
+        }
+
+        .upload-zone .file-name {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--graphite);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 240px;
+            margin: 0 auto;
+        }
+
+        .upload-zone .file-hint {
+            font-size: 0.75rem;
+            color: var(--stone-300);
+            margin-top: var(--space-xs);
+        }
+
+        .upload-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* 字段标签组 */
+        .field-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: var(--space-xs);
+        }
+
+        .field-tag {
+            background: var(--pure-white);
+            border: 1px solid var(--stone-100);
+            border-radius: 30px;
+            padding: 0.35rem 1rem;
+            font-size: 0.8rem;
+            font-weight: 400;
+            color: var(--stone-500);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: var(--transition);
+            cursor: default;
+        }
+
+        .field-tag i {
+            font-size: 0.7rem;
+            color: var(--stone-300);
+        }
+
+        .field-tag:hover {
+            border-color: var(--accent-sand);
+            color: var(--graphite);
+        }
+
+        /* 输入框 */
+        .command-input {
+            width: 100%;
+            padding: var(--space-sm) 0;
+            border: none;
+            border-bottom: 1px solid var(--stone-100);
+            background: transparent;
+            font-family: "Inter", sans-serif;
+            font-size: 0.95rem;
+            color: var(--graphite);
+            transition: var(--transition);
+            border-radius: 0;
+        }
+
+        .command-input:focus {
+            outline: none;
+            border-bottom-color: var(--accent-sand);
+        }
+
+        .command-input::placeholder {
+            color: var(--stone-300);
+            font-weight: 300;
+            font-size: 0.9rem;
+        }
+
+        /* 进度条 */
+        .progress-track {
+            margin: var(--space-md) 0;
+            height: 4px;
+            background: var(--mist-gray);
+            border-radius: 4px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--accent-sand);
+            border-radius: 4px;
+            transition: width 0.2s ease;
+        }
+
+        /* 按钮——只有一种 */
+        .btn-primary {
+            background: var(--graphite);
+            color: white;
+            border: none;
+            border-radius: 40px;
+            padding: var(--space-sm) var(--space-lg);
+            font-size: 0.95rem;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-xs);
+            width: 100%;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+        }
+
+        .btn-primary:hover {
+            background: #1F2329;
+            transform: scale(1.01);
+            box-shadow: 0 12px 24px -12px var(--graphite);
+        }
+
+        .btn-primary i {
+            font-size: 1rem;
+            color: var(--stone-100);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        /* 结果卡片 */
+        .result-slab {
+            background: var(--snow-white);
+            border-radius: var(--radius-md);
+            padding: var(--space-lg);
+            margin-top: var(--space-lg);
+            border: 1px solid var(--mist-gray);
+            display: none;
+        }
+
+        .result-slab.show {
+            display: block;
+        }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-md);
+        }
+
+        .result-header i {
+            color: var(--accent-sand);
+            font-size: 1.5rem;
+        }
+
+        .result-header h3 {
+            font-weight: 450;
+            color: var(--graphite);
+        }
+
+        .preview-area {
+            background: var(--pure-white);
+            border-radius: var(--radius-sm);
+            padding: var(--space-md);
+            font-size: 0.85rem;
+            color: var(--stone-500);
+            border: 1px solid var(--mist-gray);
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 200px;
+            overflow: auto;
+        }
+
+        .download-link {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            margin-top: var(--space-md);
+            color: var(--graphite);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9rem;
+            border-bottom: 1px dashed transparent;
+            transition: var(--transition);
+        }
+
+        .download-link:hover {
+            border-bottom-color: var(--accent-sand);
+            color: var(--graphite);
+        }
+
+        .download-link i {
+            color: var(--accent-sand);
+        }
+
+        .error-message {
+            color: #B85C5C;
+            background: #FDF3F3;
+            border-radius: var(--radius-sm);
+            padding: var(--space-sm);
+            margin-top: var(--space-md);
+            font-size: 0.85rem;
+            border: 1px solid #F0D9D9;
+            display: none;
+        }
+
+        /* 底部装饰——谦逊 */
+        .spa-footer {
+            padding: var(--space-md) var(--space-xl);
+            border-top: 1px solid var(--mist-gray);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--stone-300);
+            font-size: 0.8rem;
+        }
+
+        /* 响应式：移动端依然优雅 */
+        @media (max-width: 800px) {
+            .spa-grid {
+                grid-template-columns: 1fr;
+                gap: var(--space-md);
+                padding: var(--space-md);
+            }
+            .spa-header {
+                padding: var(--space-md);
+                flex-direction: column;
+                align-items: start;
+            }
+            .badge {
+                align-self: flex-start;
+            }
+            .spa-footer {
+                flex-direction: column;
+                align-items: start;
+                gap: var(--space-xs);
+            }
+        }
+
+       
+        i, .icon {
+            font-style: normal;
+            font-variant: normal;
+            text-rendering: auto;
+            -webkit-font-smoothing: antialiased;
+        }
+    </style>
+</head>
+<body>
+<div class="spa-container">
+    <!-- header · 专业印记 -->
+    <div class="spa-header">
+        <div class="logo-area">
+            <div class="icon-mark">
+                <i class="fas fa-file-signature"></i> <!-- 专业文档图标 -->
+            </div>
+            <div class="title">
+                <h1>智能填表 · A23</h1>
+                <div class="sub">基于大语言模型的文档理解系统</div>
+            </div>
+        </div>
+        <div class="badge">
+            <i class="fas fa-shield-alt" style="margin-right: 6px;"></i> 数据安全 · 本地处理
+        </div>
+    </div>
+
+    <!-- 核心工作区 · 纯净网格 -->
+    <div class="spa-grid">
+        <!-- 左侧卡片：文档上传 -->
+        <div class="virtue-card">
+            <div class="card-header">
+                <i class="fas fa-file-lines"></i>
+                <h2>源文档</h2>
+                <span>必要</span>
+            </div>
+            <div class="upload-zone" id="docZone">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <div class="file-name" id="docName">未选择文件</div>
+                <div class="file-hint" id="docHint">点击或拖拽 · PDF/DOCX/TXT/MD</div>
+                <input type="file" id="docInput" accept=".txt,.docx,.md,.xlsx,.pdf">
+            </div>
+            <div style="font-size:0.8rem; color:var(--stone-300); display: flex; gap: 1rem; margin-top: 0.2rem;">
+                <span><i class="fas fa-check-circle" style="color:var(--accent-sand); margin-right: 4px;"></i>最大 50MB</span>
+                <span><i class="fas fa-lock" style="color:var(--stone-300);"></i> 本地处理</span>
+            </div>
+        </div>
+
+        <!-- 右侧卡片：模板与指令 -->
+        <div class="virtue-card">
+            <div class="card-header">
+                <i class="fas fa-table"></i>
+                <h2>表格模板</h2>
+                <span>必要</span>
+            </div>
+            <div class="upload-zone" id="templateZone">
+                <i class="fas fa-file-excel"></i>
+                <div class="file-name" id="templateName">未选择模板</div>
+                <div class="file-hint" id="templateHint">Excel 工作簿 · .xlsx / .xls</div>
+                <input type="file" id="templateInput" accept=".xlsx,.xls">
+            </div>
+
+            <!-- 指令区域-->
+            <div style="margin-top: var(--space-md);">
+                <label style="font-size:0.8rem; font-weight:500; color:var(--stone-500); letter-spacing:0.3px;"><i class="fas fa-pen" style="margin-right: 6px;"></i>自然语言指令</label>
+                <input type="text" class="command-input" id="commandField" placeholder="例如：提取甲方、乙方、金额" value="提取所有数据填表">
+            </div>
+
+            <!-- 常用字段提示-->
+            <div style="margin-top: var(--space-sm);">
+                <div style="font-size:0.75rem; color:var(--stone-300); margin-bottom: 0.5rem;">常用字段</div>
+                <div class="field-group">
+                    <span class="field-tag"><i class="fas fa-tag"></i>甲方</span>
+                    <span class="field-tag"><i class="fas fa-tag"></i>乙方</span>
+                    <span class="field-tag"><i class="fas fa-coins"></i>金额</span>
+                    <span class="field-tag"><i class="fas fa-calendar"></i>日期</span>
+                    <span class="field-tag"><i class="fas fa-building"></i>指标分类</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 进度 & 行动区 -->
+    <div style="padding: 0 var(--space-xl) var(--space-xl) var(--space-xl);">
+        <!-- 进度条 (极简) -->
+        <div class="progress-track" id="progressTrack">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <!-- 主按钮 -->
+        <button class="btn-primary" id="processBtn" disabled>
+            <i class="fas fa-rotate-right"></i> 执行智能填表
+        </button>
+
+        <!-- 结果面板 (动态) -->
+        <div class="result-slab" id="resultPanel">
+            <div class="result-header">
+                <i class="fas fa-circle-check"></i>
+                <h3>提取完成</h3>
+            </div>
+            <div class="preview-area" id="previewData">等待处理结果…</div>
+            <a href="#" class="download-link" id="downloadBtn" style="display: none;">
+                <i class="fas fa-file-arrow-down"></i> 下载填好的表格
+            </a>
+            <div class="error-message" id="errorMsg"></div>
+        </div>
+    </div>
+
+    <!-- footer · 极淡版权/状态 -->
+    <div class="spa-footer">
+        <span><i class="fas fa-microchip"></i> 本地推理 · 数据不离开设备</span>
+        <span><i class="fas fa-gem"></i> A23 金陵科技学院 · 瑞士标准体验</span>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // DOM 元素
+        const docInput = document.getElementById('docInput');
+        const templateInput = document.getElementById('templateInput');
+        const docName = document.getElementById('docName');
+        const templateName = document.getElementById('templateName');
+        const docZone = document.getElementById('docZone');
+        const templateZone = document.getElementById('templateZone');
+        const processBtn = document.getElementById('processBtn');
+        const progressTrack = document.getElementById('progressTrack');
+        const progressFill = document.getElementById('progressFill');
+        const resultPanel = document.getElementById('resultPanel');
+        const previewData = document.getElementById('previewData');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const errorMsg = document.getElementById('errorMsg');
+        const commandField = document.getElementById('commandField');
+
+        let selectedDoc = null;
+        let selectedTemplate = null;
+
+        // 辅助函数：更新文件名显示
+        function updateFileInfo(input, nameEl, zoneEl, isTemplate = false) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                nameEl.textContent = file.name;
+                zoneEl.classList.add('file-selected');
+                if (isTemplate) {
+                    selectedTemplate = file;
+                } else {
+                    selectedDoc = file;
+                }
+            } else {
+                nameEl.textContent = isTemplate ? '未选择模板' : '未选择文件';
+                if (isTemplate) {
+                    selectedTemplate = null;
+                } else {
+                    selectedDoc = null;
+                }
+            }
+            updateProcessButton();
+        }
+
+        function updateProcessButton() {
+            processBtn.disabled = !(selectedDoc && selectedTemplate);
+        }
+
+        // 重置结果区域（新上传时隐藏旧结果）
+        function resetResultDisplay() {
+            resultPanel.classList.remove('show');
+            downloadBtn.style.display = 'none';
+            errorMsg.style.display = 'none';
+            previewData.textContent = '等待处理结果…';
+        }
+
+        // 监听文档上传
+        docInput.addEventListener('change', function() {
+            updateFileInfo(docInput, docName, docZone, false);
+            resetResultDisplay();
+        });
+
+        // 监听模板上传
+        templateInput.addEventListener('change', function() {
+            updateFileInfo(templateInput, templateName, templateZone, true);
+            resetResultDisplay();
+        });
+
+        // 拖拽支持
+        [docZone, templateZone].forEach(zone => {
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.style.borderColor = 'var(--accent-sand)';
+                zone.style.background = 'white';
+            });
+            zone.addEventListener('dragleave', () => {
+                zone.style.borderColor = 'var(--stone-100)';
+                zone.style.background = 'var(--snow-white)';
+            });
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.style.borderColor = 'var(--stone-100)';
+                zone.style.background = 'var(--snow-white)';
+                const files = e.dataTransfer.files;
+                if (files.length) {
+                    if (zone === docZone && files[0].type.match(/text|pdf|document|spreadsheet/i)) {
+                        docInput.files = files;
+                        updateFileInfo(docInput, docName, docZone, false);
+                    } else if (zone === templateZone && files[0].name.match(/\.xlsx?$/i)) {
+                        templateInput.files = files;
+                        updateFileInfo(templateInput, templateName, templateZone, true);
+                    }
+                }
+                resetResultDisplay();
+            });
+        });
+
+        // 点击上传区域
+        docZone.addEventListener('click', () => docInput.click());
+        templateZone.addEventListener('click', () => templateInput.click());
+
+        // 处理按钮点击 - 修复版本
+        processBtn.addEventListener('click', async function(e) {
+            e.preventDefault();  // 防止任何默认行为
+            
+            // 再次检查，确保按钮真的可用
+            if (!selectedDoc || !selectedTemplate) {
+                alert('请先选择文档和模板');
+                return;
+            }
+
+            // 立即禁用按钮防止重复点击
+            processBtn.disabled = true;
+
+            // 显示进度条
+            progressTrack.style.display = 'block';
+            progressFill.style.width = '0%';
+            resultPanel.classList.remove('show');
+            downloadBtn.style.display = 'none';
+            errorMsg.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('document', selectedDoc);
+            formData.append('template', selectedTemplate);
+            formData.append('command', commandField.value.trim() || '提取所有数据填表');
+
+            let progress = 0;
+            const interval = setInterval(() => {
+                if (progress < 90) {
+                    progress += 8;
+                    progressFill.style.width = progress + '%';
+                }
+            }, 200);
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/upload', { 
+                    method: 'POST', 
+                    body: formData 
+                });
+                
+                clearInterval(interval);
+                progressFill.style.width = '100%';
+                
+                setTimeout(() => { 
+                    progressTrack.style.display = 'none'; 
+                }, 400);
+
+                if (response.ok) {
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.includes('application/vnd.openxmlformats-officedocument')) {
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        downloadBtn.href = url;
+                        downloadBtn.download = 'filled_result.xlsx';
+                        downloadBtn.style.display = 'inline-flex';
+                        previewData.textContent = '表格生成完毕，点击下方按钮下载。';
+                        resultPanel.classList.add('show');
+                        errorMsg.style.display = 'none';
+                    } else {
+                        const data = await response.json();
+                        previewData.textContent = JSON.stringify(data, null, 2);
+                        resultPanel.classList.add('show');
+                        if (data.download_url) {
+                            downloadBtn.href = data.download_url;
+                            downloadBtn.style.display = 'inline-flex';
+                        }
+                    }
+                } else {
+                    const errText = await response.text();
+                    errorMsg.textContent = errText || '处理失败';
+                    errorMsg.style.display = 'block';
+                    resultPanel.classList.add('show');
+                    previewData.textContent = '服务返回错误';
+                }
+            } catch (err) {
+                clearInterval(interval);
+                progressFill.style.width = '100%';
+                setTimeout(() => { 
+                    progressTrack.style.display = 'none'; 
+                }, 400);
+                
+                errorMsg.textContent = '网络错误: ' + err.message;
+                errorMsg.style.display = 'block';
+                resultPanel.classList.add('show');
+                previewData.textContent = '连接失败';
+            } finally {
+                // 处理完成后重新启用按钮（但保留文件选择状态）
+                setTimeout(() => {
+                    processBtn.disabled = false;
+                }, 500);
+            }
+        });
+
+        // 初始禁用按钮
+        updateProcessButton();
+    })();
+</script>
+</body>
+</html>
