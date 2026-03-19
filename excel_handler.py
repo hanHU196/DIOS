@@ -37,47 +37,113 @@ def fill_excel_with_data(template_path, data, output_path):
     wb.save(output_path)
     print(f"✅ Excel 文件已生成：{output_path}，共 {len(data)} 行数据")
 # Word 工具函数
-# 替换段落中的占位符
-def replace_placeholders_in_paragraph(paragraph, data):
-    """遍历 runs 替换占位符，保留样式"""
-    for run in paragraph.runs:
-        text = run.text
-        for key, value in data.items():
-            placeholder = '{{' + key + '}}'
-            if placeholder in text:
-                text = text.replace(placeholder, str(value))
-        run.text = text
+def parse_word_template(template_path):
+    """
+    解析 Word 模板，提取所有表格的表头字段。
+    """
+    doc = Document(template_path)
+    all_headers = []
+    for table in doc.tables:
+        if len(table.rows) > 0:
+            header_row = table.rows[0]
+            headers = [cell.text.strip() for cell in header_row.cells]
+            all_headers.append(headers)
 
-# 替换表格中的占位符
-def replace_placeholders_in_table(table, data):
-    """替换表格单元格中的占位符"""
-    for row in table.rows:
-        for cell in row.cells:
-            for paragraph in cell.paragraphs:
-                replace_placeholders_in_paragraph(paragraph, data)
+    if not all_headers:
+        print("⚠️ 未找到任何表格")
+        return []
 
-# 填充 Word 模板
-def fill_word_with_data(template_path, data_records, output_dir, filename_prefix="output"):
+    # 检查所有表头是否一致
+    first_headers = all_headers[0]
+    for headers in all_headers[1:]:
+        if headers != first_headers:
+            print("⚠️ 警告：表格表头不一致，将返回所有表头的并集")
+            # 合并所有表头（去重）
+            merged = set()
+            for h in all_headers:
+                merged.update(h)
+            return list(merged)
+
+    return first_headers
+
+
+def fill_single_table_with_records(table, records):
+    """清空表格中除表头外的所有行，并用记录填充。"""
+    if not records:
+        return
+    header_row = table.rows[0]
+    headers = [cell.text.strip() for cell in header_row.cells]
+    # 删除表头以下的所有行
+    tbl = table._tbl
+    for i in range(len(table.rows) - 1, 0, -1):
+        tr = table.rows[i]._tr
+        tbl.remove(tr)
+    # 添加数据行
+    for record in records:
+        row = table.add_row()
+        for col_idx, header in enumerate(headers):
+            if col_idx < len(row.cells):
+                value = record.get(header, '')
+                row.cells[col_idx].text = str(value)
+
+
+def fill_word_tables(doc, data_records, group_by='城市', extract_key_func=None):
+    """遍历文档的段落和表格，按分组填充表格。"""
+    """extract_entity_func: 由队友提供的函数，输入段落文本，返回实体值（如城市名）"""
+
+    # 按 group_by 字段分组数据
+    groups = {}
+    for rec in data_records:
+        key = rec.get(group_by)
+        if key:
+            groups.setdefault(key, []).append(rec)
+
+    # 2. 遍历文档元素（段落和表格）
+    elements = []
+    p_iter = iter(doc.paragraphs)
+    t_iter = iter(doc.tables)
+    for child in doc.element.body.iterchildren():
+        tag = child.tag
+        if tag.endswith('p'):
+            elements.append(('paragraph', next(p_iter)))
+        elif tag.endswith('tbl'):
+            elements.append(('table', next(t_iter)))
+
+    current_key = None
+    for elem_type, elem in elements:
+        if elem_type == 'paragraph':
+            if extract_key_func:
+                key = extract_key_func(elem.text)
+            else:
+                # 使用 AI 模块提取实体（目标字段为 group_by）
+                try:
+                    entities = extract_entities(elem.text, [group_by])
+                    key = entities.get(group_by)
+                    # 如果返回的是列表，取第一个元素（假设要求单个值）
+                    if isinstance(key, list):
+                        key = key[0] if key else None
+                except Exception as e:
+                    print(f"⚠️ AI提取实体出错: {e}")
+                    key = None
+            if key:
+                current_key = key
+        else:  # table
+            if current_key and current_key in groups:
+                fill_single_table_with_records(elem, groups[current_key])
+            else:
+                print(f"⚠️ 未找到段落对应的数据（key={current_key}）")
+
+
+def fill_word_with_data(template_path, data_records, output_dir, filename_prefix="output",
+                        group_by='城市', extract_key_func=None):
+    """填充 Word 模板（表格填充模式）。"""
     os.makedirs(output_dir, exist_ok=True)
-    for idx, record in enumerate(data_records):
-        doc = Document(template_path)
-        # 替换段落
-        for paragraph in doc.paragraphs:
-            replace_placeholders_in_paragraph(paragraph, record)
-        # 替换表格
-        for table in doc.tables:
-            replace_placeholders_in_table(table, record)
-        # 替换页眉页脚
-        for section in doc.sections:
-            for paragraph in section.header.paragraphs:
-                replace_placeholders_in_paragraph(paragraph, record)
-            for paragraph in section.footer.paragraphs:
-                replace_placeholders_in_paragraph(paragraph, record)
-        # 保存文件
-        filename = f"{filename_prefix}_{idx+1}.docx"
-        output_path = os.path.join(output_dir, filename)
-        doc.save(output_path)
-        print(f"Word 文件已生成：{output_path}")
+
+    doc = Document(template_path)
+    fill_word_tables(doc, data_records, group_by=group_by, extract_key_func=extract_key_func)
+    output_path = os.path.join(output_dir, f"{filename_prefix}.docx")
+    doc.save(output_path)
+    print(f"✅ Word 文件已生成（表格填充）：{output_path}")
 
 # MongoDB 操作类
 class MongoDBHandler:
