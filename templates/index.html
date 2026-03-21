@@ -7,7 +7,6 @@
     <style>
         /* ---------- 设计 Token ---------- */
         :root {
-            /* 颜色 - Light */
             --background: 255 255 255;
             --foreground: 10 10 10;
             --card: 255 255 255;
@@ -22,7 +21,6 @@
             --muted: 243 244 246;
             --muted-foreground: 107 114 128;
 
-            /* 间距 */
             --spacing-1: 4px;
             --spacing-2: 8px;
             --spacing-3: 12px;
@@ -32,14 +30,10 @@
             --spacing-10: 40px;
             --spacing-12: 48px;
 
-            /* 圆角 */
             --radius: 10px;
-
-            /* 阴影 */
             --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
             --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
 
-            /* 字体 */
             --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             --text-xs: 12px;
             --text-sm: 14px;
@@ -82,7 +76,6 @@
             transition: background-color 0.2s, color 0.2s;
         }
 
-        /* 布局容器 */
         .container {
             max-width: 1200px;
             margin: 0 auto;
@@ -90,25 +83,20 @@
             padding-right: var(--spacing-6);
         }
 
-        /* 顶部导航 */
         .header {
             border-bottom: 1px solid rgb(var(--border));
             padding: var(--spacing-4) 0;
         }
-
         .header-content {
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-
         .logo {
             font-size: var(--text-xl);
             font-weight: 600;
             letter-spacing: -0.02em;
         }
-
-        /* 主题切换按钮 */
         .theme-toggle {
             background: none;
             border: none;
@@ -125,7 +113,6 @@
             background-color: rgb(var(--secondary));
         }
 
-        /* 菜单栏 */
         .menu {
             display: flex;
             gap: var(--spacing-4);
@@ -151,13 +138,11 @@
             color: rgb(var(--foreground));
         }
 
-        /* 内容区 */
         .content {
             padding-top: var(--spacing-8);
             padding-bottom: var(--spacing-12);
         }
 
-        /* 卡片 */
         .card {
             background-color: rgb(var(--card));
             border: 1px solid rgb(var(--border));
@@ -169,8 +154,6 @@
         .card:hover {
             box-shadow: var(--shadow-md);
         }
-
-        /* 卡片内间距 */
         .card-header {
             margin-bottom: var(--spacing-6);
         }
@@ -191,7 +174,6 @@
             margin-top: var(--spacing-1);
         }
 
-        /* 表单 */
         .form-group {
             margin-bottom: var(--spacing-6);
         }
@@ -201,7 +183,6 @@
             font-weight: 500;
             margin-bottom: var(--spacing-2);
         }
-        /* 文件上传区域 */
         .file-area {
             border: 1px dashed rgb(var(--border));
             border-radius: var(--radius);
@@ -233,7 +214,6 @@
             font-size: var(--text-sm);
             color: rgb(var(--muted-foreground));
         }
-        /* 普通输入框 */
         .input {
             width: 100%;
             height: 40px;
@@ -250,7 +230,6 @@
             border-color: rgb(var(--ring));
             box-shadow: 0 0 0 2px rgba(var(--ring), 0.2);
         }
-        /* 按钮 */
         .btn {
             height: 40px;
             padding: 0 var(--spacing-4);
@@ -271,7 +250,6 @@
             cursor: not-allowed;
         }
 
-        /* 结果区域 */
         .result-area {
             margin-top: var(--spacing-6);
             padding-top: var(--spacing-6);
@@ -300,15 +278,11 @@
         .download-link:hover {
             text-decoration: underline;
         }
-
-        /* 错误提示 */
         .error-message {
             color: #ef4444;
             font-size: var(--text-sm);
             margin-top: var(--spacing-2);
         }
-
-        /* 辅助 */
         .hidden {
             display: none;
         }
@@ -316,12 +290,11 @@
 </head>
 <body>
     <div class="container">
-        <!-- 顶部导航 -->
         <div class="header">
             <div class="header-content">
                 <div class="logo">DocMind</div>
                 <button class="theme-toggle" id="themeToggle" aria-label="切换主题">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="5"/>
                         <line x1="12" y1="1" x2="12" y2="3"/>
                         <line x1="12" y1="21" x2="12" y2="23"/>
@@ -336,22 +309,20 @@
             </div>
         </div>
 
-        <!-- 菜单栏 -->
         <div class="menu">
             <button class="menu-item active" data-tab="extract">智能文档提取</button>
             <button class="menu-item" data-tab="fill">表格智能填写</button>
+            <button class="menu-item" data-tab="format">文档格式调整</button>
         </div>
 
-        <!-- 内容区 -->
         <div class="content">
-            <!-- 智能文档提取卡片 -->
+            <!-- 卡片1：智能文档提取 -->
             <div id="extractCard" class="card">
                 <div class="card-header">
                     <div class="card-title">智能文档提取</div>
                     <div class="card-description">自动识别关键实体，支持多文档合并分析</div>
                     <div class="card-sub">支持格式：txt, docx, md, xlsx</div>
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">上传文档（可多选）</label>
                     <div class="file-area" id="extractFileArea">
@@ -366,15 +337,12 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">提取指令</label>
                     <input type="text" id="extractCommand" class="input" placeholder="例如：提取甲方、乙方、金额">
                     <div class="card-sub" style="margin-top: var(--spacing-1);">可使用“提取”开头，后接字段名（逗号/顿号分隔）</div>
                 </div>
-
                 <button class="btn" id="extractSubmitBtn">开始提取</button>
-
                 <div id="extractResult" class="result-area hidden">
                     <div class="result-title">提取结果</div>
                     <pre class="result-content" id="extractResultContent"></pre>
@@ -382,14 +350,13 @@
                 <div id="extractError" class="error-message hidden"></div>
             </div>
 
-            <!-- 表格智能填写卡片 (初始隐藏) -->
+            <!-- 卡片2：表格智能填写 -->
             <div id="fillCard" class="card hidden">
                 <div class="card-header">
                     <div class="card-title">表格智能填写</div>
                     <div class="card-description">基于文档内容自动填充 Excel 模板</div>
                     <div class="card-sub">支持多文档合并，填充结果可下载</div>
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">上传文档（可多选）</label>
                     <div class="file-area" id="fillDocArea">
@@ -403,7 +370,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">上传 Excel 模板</label>
                     <div class="file-area" id="fillTemplateArea">
@@ -417,26 +383,56 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">填充指令</label>
                     <input type="text" id="fillCommand" class="input" placeholder="例如：提取甲方、乙方、金额">
                     <div class="card-sub" style="margin-top: var(--spacing-1);">指定要提取的字段，将自动匹配模板表头</div>
                 </div>
-
                 <button class="btn" id="fillSubmitBtn">生成并下载 Excel</button>
-
                 <div id="fillResult" class="result-area hidden">
                     <div class="result-title">下载链接</div>
                     <a href="#" id="downloadLink" class="download-link" download>点击下载生成的表格</a>
                 </div>
                 <div id="fillError" class="error-message hidden"></div>
             </div>
+
+            <!-- 卡片3：文档格式调整（模块1） -->
+            <div id="formatCard" class="card hidden">
+                <div class="card-header">
+                    <div class="card-title">文档格式调整</div>
+                    <div class="card-description">通过自然语言指令调整文档排版、对齐、字体等格式</div>
+                    <div class="card-sub">支持 Word 文档（.docx），如“将所有段落居中”、“将标题加粗”</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">上传文档</label>
+                    <div class="file-area" id="formatFileArea">
+                        <input type="file" id="formatFile" accept=".docx" class="file-input">
+                        <div class="file-area-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                            </svg>
+                            <span class="file-info" id="formatFileInfo">点击上传 Word 文档 (.docx)</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">格式指令</label>
+                    <input type="text" id="formatCommand" class="input" placeholder="例如：将所有段落居中、将标题加粗、设置字体为宋体">
+                    <div class="card-sub" style="margin-top: var(--spacing-1);">支持：居中、左对齐、右对齐、加粗、斜体、字体、字号等</div>
+                </div>
+                <button class="btn" id="formatSubmitBtn">应用格式并下载</button>
+                <div id="formatResult" class="result-area hidden">
+                    <div class="result-title">处理完成</div>
+                    <a href="#" id="formatDownloadLink" class="download-link" download>点击下载处理后的文档</a>
+                </div>
+                <div id="formatError" class="error-message hidden"></div>
+            </div>
         </div>
     </div>
 
     <script>
-        // ---------- 主题切换 ----------
+        // 主题切换
         const themeToggle = document.getElementById('themeToggle');
         const setTheme = (theme) => {
             if (theme === 'dark') {
@@ -447,7 +443,6 @@
                 localStorage.setItem('theme', 'light');
             }
         };
-        // 初始化主题
         const savedTheme = localStorage.getItem('theme');
         if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
             setTheme('dark');
@@ -459,38 +454,32 @@
             setTheme(isDark ? 'light' : 'dark');
         });
 
-        // ---------- 菜单切换 ----------
+        // 菜单切换
         const extractCard = document.getElementById('extractCard');
         const fillCard = document.getElementById('fillCard');
+        const formatCard = document.getElementById('formatCard');
         const menuItems = document.querySelectorAll('.menu-item');
-
         function switchTab(tab) {
-            if (tab === 'extract') {
-                extractCard.classList.remove('hidden');
-                fillCard.classList.add('hidden');
-                menuItems.forEach(item => {
-                    if (item.dataset.tab === 'extract') item.classList.add('active');
-                    else item.classList.remove('active');
-                });
-            } else {
-                extractCard.classList.add('hidden');
-                fillCard.classList.remove('hidden');
-                menuItems.forEach(item => {
-                    if (item.dataset.tab === 'fill') item.classList.add('active');
-                    else item.classList.remove('active');
-                });
-            }
+            extractCard.classList.add('hidden');
+            fillCard.classList.add('hidden');
+            formatCard.classList.add('hidden');
+            if (tab === 'extract') extractCard.classList.remove('hidden');
+            else if (tab === 'fill') fillCard.classList.remove('hidden');
+            else if (tab === 'format') formatCard.classList.remove('hidden');
+            menuItems.forEach(item => {
+                if (item.dataset.tab === tab) item.classList.add('active');
+                else item.classList.remove('active');
+            });
         }
-
         menuItems.forEach(item => {
             item.addEventListener('click', () => switchTab(item.dataset.tab));
         });
 
-        // ---------- 辅助函数：更新文件列表显示 ----------
+        // 辅助函数：更新文件列表显示
         function updateFileInfo(inputElement, infoElement, multiple = true) {
             const files = inputElement.files;
             if (files.length === 0) {
-                infoElement.textContent = multiple ? '点击或拖拽上传文件' : '点击上传 Excel 模板';
+                infoElement.textContent = multiple ? '点击或拖拽上传文件' : '点击上传文件';
                 return;
             }
             if (multiple) {
@@ -500,99 +489,79 @@
             }
         }
 
-        // 智能文档提取相关元素
-        const extractFilesInput = document.getElementById('extractFiles');
+        // ---------- 智能文档提取 ----------
+        const extractFiles = document.getElementById('extractFiles');
         const extractFileInfo = document.getElementById('extractFileInfo');
-        const extractCommandInput = document.getElementById('extractCommand');
-        const extractSubmitBtn = document.getElementById('extractSubmitBtn');
+        const extractCommand = document.getElementById('extractCommand');
+        const extractSubmit = document.getElementById('extractSubmitBtn');
         const extractResultDiv = document.getElementById('extractResult');
         const extractResultContent = document.getElementById('extractResultContent');
-        const extractErrorDiv = document.getElementById('extractError');
-
-        extractFilesInput.addEventListener('change', () => updateFileInfo(extractFilesInput, extractFileInfo, true));
-        // 点击文件区域触发选择
-        document.getElementById('extractFileArea').addEventListener('click', () => extractFilesInput.click());
-
-        extractSubmitBtn.addEventListener('click', async () => {
-            const files = extractFilesInput.files;
-            const command = extractCommandInput.value.trim();
+        const extractError = document.getElementById('extractError');
+        extractFiles.addEventListener('change', () => updateFileInfo(extractFiles, extractFileInfo, true));
+        document.getElementById('extractFileArea').addEventListener('click', () => extractFiles.click());
+        extractSubmit.addEventListener('click', async () => {
+            const files = extractFiles.files;
+            const command = extractCommand.value.trim();
             if (files.length === 0 || !command) {
-                extractErrorDiv.textContent = '请选择文档并输入指令';
-                extractErrorDiv.classList.remove('hidden');
+                extractError.textContent = '请选择文档并输入指令';
+                extractError.classList.remove('hidden');
                 return;
             }
-            extractErrorDiv.classList.add('hidden');
+            extractError.classList.add('hidden');
             extractResultDiv.classList.add('hidden');
-            extractSubmitBtn.disabled = true;
-            extractSubmitBtn.textContent = '提取中...';
-
+            extractSubmit.disabled = true;
+            extractSubmit.textContent = '提取中...';
             const formData = new FormData();
-            for (let i = 0; i < files.length; i++) {
-                formData.append('documents', files[i]);
-            }
+            for (let i = 0; i < files.length; i++) formData.append('documents', files[i]);
             formData.append('command', command);
-
             try {
-                const response = await fetch('/api/extract', {
-                    method: 'POST',
-                    body: formData,
-                });
+                const response = await fetch('/api/extract', { method: 'POST', body: formData });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || '提取失败');
                 extractResultContent.textContent = JSON.stringify(data, null, 2);
                 extractResultDiv.classList.remove('hidden');
-                extractErrorDiv.classList.add('hidden');
             } catch (err) {
-                extractErrorDiv.textContent = err.message;
-                extractErrorDiv.classList.remove('hidden');
+                extractError.textContent = err.message;
+                extractError.classList.remove('hidden');
             } finally {
-                extractSubmitBtn.disabled = false;
-                extractSubmitBtn.textContent = '开始提取';
+                extractSubmit.disabled = false;
+                extractSubmit.textContent = '开始提取';
             }
         });
 
-        // 表格智能填写相关元素
-        const fillDocsInput = document.getElementById('fillDocs');
+        // ---------- 表格智能填写 ----------
+        const fillDocs = document.getElementById('fillDocs');
         const fillDocInfo = document.getElementById('fillDocInfo');
-        const fillTemplateInput = document.getElementById('fillTemplate');
+        const fillTemplate = document.getElementById('fillTemplate');
         const fillTemplateInfo = document.getElementById('fillTemplateInfo');
-        const fillCommandInput = document.getElementById('fillCommand');
-        const fillSubmitBtn = document.getElementById('fillSubmitBtn');
+        const fillCommand = document.getElementById('fillCommand');
+        const fillSubmit = document.getElementById('fillSubmitBtn');
         const fillResultDiv = document.getElementById('fillResult');
         const downloadLink = document.getElementById('downloadLink');
-        const fillErrorDiv = document.getElementById('fillError');
-
-        fillDocsInput.addEventListener('change', () => updateFileInfo(fillDocsInput, fillDocInfo, true));
-        fillTemplateInput.addEventListener('change', () => updateFileInfo(fillTemplateInput, fillTemplateInfo, false));
-        document.getElementById('fillDocArea').addEventListener('click', () => fillDocsInput.click());
-        document.getElementById('fillTemplateArea').addEventListener('click', () => fillTemplateInput.click());
-
-        fillSubmitBtn.addEventListener('click', async () => {
-            const docFiles = fillDocsInput.files;
-            const templateFile = fillTemplateInput.files[0];
-            const command = fillCommandInput.value.trim();
+        const fillError = document.getElementById('fillError');
+        fillDocs.addEventListener('change', () => updateFileInfo(fillDocs, fillDocInfo, true));
+        fillTemplate.addEventListener('change', () => updateFileInfo(fillTemplate, fillTemplateInfo, false));
+        document.getElementById('fillDocArea').addEventListener('click', () => fillDocs.click());
+        document.getElementById('fillTemplateArea').addEventListener('click', () => fillTemplate.click());
+        fillSubmit.addEventListener('click', async () => {
+            const docFiles = fillDocs.files;
+            const templateFile = fillTemplate.files[0];
+            const command = fillCommand.value.trim();
             if (docFiles.length === 0 || !templateFile || !command) {
-                fillErrorDiv.textContent = '请上传文档、模板并输入指令';
-                fillErrorDiv.classList.remove('hidden');
+                fillError.textContent = '请上传文档、模板并输入指令';
+                fillError.classList.remove('hidden');
                 return;
             }
-            fillErrorDiv.classList.add('hidden');
+            fillError.classList.add('hidden');
             fillResultDiv.classList.add('hidden');
-            fillSubmitBtn.disabled = true;
-            fillSubmitBtn.textContent = '生成中...';
-
+            fillSubmit.disabled = true;
+            fillSubmit.textContent = '生成中...';
             const formData = new FormData();
-            for (let i = 0; i < docFiles.length; i++) {
-                formData.append('documents', docFiles[i]);
-            }
+            for (let i = 0; i < docFiles.length; i++) formData.append('documents', docFiles[i]);
             formData.append('template', templateFile);
             formData.append('command', command);
-
             try {
-                const response = await fetch('/api/fill', {
-                    method: 'POST',
-                    body: formData,
-                });
+                const response = await fetch('/api/fill', { method: 'POST', body: formData });
                 if (!response.ok) {
                     const errData = await response.json();
                     throw new Error(errData.error || '生成失败');
@@ -601,13 +570,56 @@
                 const url = URL.createObjectURL(blob);
                 downloadLink.href = url;
                 fillResultDiv.classList.remove('hidden');
-                fillErrorDiv.classList.add('hidden');
             } catch (err) {
-                fillErrorDiv.textContent = err.message;
-                fillErrorDiv.classList.remove('hidden');
+                fillError.textContent = err.message;
+                fillError.classList.remove('hidden');
             } finally {
-                fillSubmitBtn.disabled = false;
-                fillSubmitBtn.textContent = '生成并下载 Excel';
+                fillSubmit.disabled = false;
+                fillSubmit.textContent = '生成并下载 Excel';
+            }
+        });
+
+        // ---------- 文档格式调整 ----------
+        const formatFile = document.getElementById('formatFile');
+        const formatFileInfo = document.getElementById('formatFileInfo');
+        const formatCommand = document.getElementById('formatCommand');
+        const formatSubmit = document.getElementById('formatSubmitBtn');
+        const formatResultDiv = document.getElementById('formatResult');
+        const formatDownloadLink = document.getElementById('formatDownloadLink');
+        const formatError = document.getElementById('formatError');
+        formatFile.addEventListener('change', () => updateFileInfo(formatFile, formatFileInfo, false));
+        document.getElementById('formatFileArea').addEventListener('click', () => formatFile.click());
+        formatSubmit.addEventListener('click', async () => {
+            const file = formatFile.files[0];
+            const command = formatCommand.value.trim();
+            if (!file || !command) {
+                formatError.textContent = '请上传文档并输入格式指令';
+                formatError.classList.remove('hidden');
+                return;
+            }
+            formatError.classList.add('hidden');
+            formatResultDiv.classList.add('hidden');
+            formatSubmit.disabled = true;
+            formatSubmit.textContent = '处理中...';
+            const formData = new FormData();
+            formData.append('document', file);
+            formData.append('command', command);
+            try {
+                const response = await fetch('/api/format', { method: 'POST', body: formData });
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || '格式调整失败');
+                }
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                formatDownloadLink.href = url;
+                formatResultDiv.classList.remove('hidden');
+            } catch (err) {
+                formatError.textContent = err.message;
+                formatError.classList.remove('hidden');
+            } finally {
+                formatSubmit.disabled = false;
+                formatSubmit.textContent = '应用格式并下载';
             }
         });
     </script>
