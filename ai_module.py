@@ -57,7 +57,7 @@ def extract_entities(text: str, targets: list) -> list:
             model="glm-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
-            max_tokens=32000,
+            max_tokens=16000,
         )
         result_text = response.choices[0].message.content.strip()
         logger.info(f"AI返回原始内容: {result_text}")
