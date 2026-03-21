@@ -5,7 +5,7 @@ import re
 from collections import Counter
 from document_reader import DocumentReader
 from excel_handler import parse_excel_template
-from mock_db import MockDatabase
+from excel_handler import MongoDBHandler
 
 # 专业词库
 ECONOMIC_TERMS = [
@@ -34,8 +34,8 @@ URBAN_TERMS = [
 class DocumentMatcher:
     def __init__(self):
         self.reader = DocumentReader()
-        self.db = MockDatabase()
-        print("✅ 文档匹配器初始化成功")
+        self.db = MongoDBHandler(db_name="document_system")
+        print("✅ 文档匹配器初始化成功（使用MongoDB）")
     
     def extract_keywords(self, text):
         """综合提取关键词"""
@@ -76,8 +76,6 @@ class DocumentMatcher:
         for path in doc_paths:
             try:
                 text = self.reader.read(path)
-                
-                # 提取关键词
                 keywords = self.extract_keywords(text)
                 
                 doc_info = {
@@ -86,10 +84,12 @@ class DocumentMatcher:
                     'keywords': keywords,
                     'keyword_count': len(keywords),
                     'word_count': len(text),
-                    'preview': text[:300]
+                    'preview': text[:300],
+                    'type': 'document'  # ✅ 必须有
                 }
                 
-                self.db.save_document(doc_info)
+                # 插入数据库
+                self.db.insert_data(doc_info)  # ✅ 用 insert_data
                 print(f"✅ 已索引：{os.path.basename(path)} ({len(keywords)}个关键词)")
                 print(f"   关键词示例：{keywords[:10]}")
                 
@@ -101,7 +101,7 @@ class DocumentMatcher:
         template_keywords = parse_excel_template(template_path)
         print(f"📋 模板字段：{template_keywords}")
         
-        all_docs = self.db.get_all_documents()
+        all_docs = self.db.query_data('document', {})
         
         if not all_docs:
             print("⚠️ 文档库为空")
@@ -134,3 +134,8 @@ class DocumentMatcher:
         else:
             print("⚠️ 没有找到匹配的文档")
             return None
+        
+    def clear_index(self):
+        """清空索引"""
+        self.db.clear_collection('document')
+        print("🧹 索引已清空")
