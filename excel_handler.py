@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 
 import pandas as pd
 from docx import Document
@@ -9,7 +10,7 @@ from pymongo import MongoClient
 from ai_module import extract_entities
 from dotenv import load_dotenv
 from bson import json_util
-import json
+from copy import deepcopy
 
 
 # Excel 工具函数
@@ -40,6 +41,47 @@ def fill_excel_with_data(template_path, data, output_path):
     
     wb.save(output_path)
     print(f"✅ Excel 文件已生成：{output_path}，共 {len(data)} 行数据")
+#excel模板多数据源合并
+def load_data_from_file(file_path):
+    """从文件加载数据（支持 JSON 和 CSV）"""
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == '.json':
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                data = [data]
+            return data
+    elif ext == '.csv':
+        df = pd.read_csv(file_path)
+        return df.to_dict('records')
+    else:
+        raise ValueError(f"不支持的文件类型: {ext}")
+
+def merge_data_sources(sources):
+    """合并多个数据源为一个数据列表"""
+    all_data = []
+    db = None  # 延迟初始化 MongoDB 连接
+
+    for src in sources:
+        if isinstance(src, dict) and src.get('type') == 'mongo':
+            if db is None:
+                db = MongoDBHandler()
+            collection = src['collection']
+            query = src.get('query', {})
+            data = db.query_data(collection, query)
+            all_data.extend(data)
+        elif isinstance(src, str):
+            # 文件路径
+            try:
+                data = load_data_from_file(src)
+                all_data.extend(data)
+            except Exception as e:
+                print(f"读取文件 {src} 失败: {e}")
+        elif isinstance(src, list):
+            all_data.extend(src)
+        else:
+            print(f"忽略不支持的数据源类型: {type(src)}")
+    return all_data
 # Word 工具函数
 def parse_word_template(template_path):
     """
@@ -149,6 +191,52 @@ def fill_word_with_data(template_path, data_records, output_dir, filename_prefix
     doc.save(output_path)
     print(f"✅ Word 文件已生成（表格填充）：{output_path}")
 
+#word模板多数据源合并
+def copy_table_row(table, source_row, target_row_index):
+    """将 source_row 复制到 table 的 target_row_index 位置"""
+    if target_row_index >= len(table.rows):
+        new_row = table.add_row()
+    else:
+        new_row = table.insert_row(target_row_index)
+    for idx, cell in enumerate(source_row.cells):
+        new_cell = new_row.cells[idx]                   # 复制段落内容和样式（简单复制文本，如需保留格式可进一步处理）
+        new_cell.text = cell.text                       # 注意：如果单元格内有占位符，我们会在填充阶段统一替换，这里只是复制结构
+    return new_row
+
+def replace_placeholders_in_paragraph(paragraph, data):
+    """遍历 runs 替换占位符，保留样式"""
+    for run in paragraph.runs:
+        text = run.text
+        for key, value in data.items():
+            placeholder = '{{' + key + '}}'
+            if placeholder in text:
+                text = text.replace(placeholder, str(value))
+        run.text = text
+        
+        
+def fill_word_with_data_merged(template_path, data, output_path, table_index=0, template_row_index=1):
+    """将数据列表填入 Word 模板的表格中，生成单个文档。"""
+    doc = Document(template_path)
+    if not doc.tables or table_index >= len(doc.tables):
+        raise ValueError(f"文档中没有表格或索引 {table_index} 超出范围")
+
+    table = doc.tables[table_index]
+    if template_row_index >= len(table.rows):
+        raise ValueError(f"模板行索引 {template_row_index} 超出表格行数")
+
+    template_row = table.rows[template_row_index]
+    for i, record in enumerate(data):
+        new_row = copy_table_row(table, template_row, template_row_index)
+        for cell in new_row.cells:
+            for paragraph in cell.paragraphs:
+                replace_placeholders_in_paragraph(paragraph, record)
+    tbl = table._tbl
+    tr = template_row._tr
+    tr.getparent().remove(tr)
+
+    doc.save(output_path)
+    print(f"合并填充 Word 文件已生成：{output_path}")
+
 # MongoDB 操作类
 class MongoDBHandler:
     def __init__(self, uri="mongodb://localhost:27017/", db_name="testdb"):
@@ -221,6 +309,66 @@ def run_test():
         fill_word_with_data(word_template, test_data, "output/word_output", filename_prefix="合同")
     else:
         print("跳过 Word 测试：模板文件不存在")
+        
+    # 1. 多数据源合并填充 Excel
+    excel_template = "templates/template.xlsx"
+    if os.path.exists(excel_template):
+        print("\n>>> 测试多数据源合并填充 Excel")
+        db = MongoDBHandler()
+        mongo_test_data = [
+            {"甲方": "Mongo源公司A", "乙方": "合作方X", "金额": 50000, "日期": "2025-03-01"},
+            {"甲方": "Mongo源公司B", "乙方": "合作方Y", "金额": 75000, "日期": "2025-03-15"},
+        ]
+        db.insert_data("contracts", mongo_test_data)  # 插入到已有集合（可能已存在数据）
+        # 准备 JSON 文件数据
+        json_file = "output/sample_data.json"
+        with open(json_file, 'w', encoding='utf-8') as f:
+            json.dump([
+                {"甲方": "JSON源公司C", "乙方": "伙伴Z", "金额": 30000, "日期": "2025-03-20"}
+            ], f, ensure_ascii=False)
+        # 硬编码数据
+        hardcoded_data = [{"甲方": "硬编码源公司D", "乙方": "测试方", "金额": 20000, "日期": "2025-03-25"}]
+        # 定义数据源
+        sources = [
+            {"type": "mongo", "collection": "contracts", "query": {"甲方": {"$regex": "源公司"}}},  # 只取我们刚插入的示例
+            hardcoded_data,
+            json_file,
+        ]
+        # 合并数据
+        merged_data = merge_data_sources(sources)
+        print(f"合并后共 {len(merged_data)} 条数据")
+        # 填充 Excel
+        fill_excel_with_data(excel_template, merged_data, "output/merged_fill.xlsx")
+        print("✅ Excel 多数据源合并填充完成：output/merged_fill.xlsx")
+    else:
+        print("⚠️ Excel 模板不存在，跳过 Excel 多数据源测试")
+
+    # 2. 多数据源合并填充 Word（单文档表格）
+    word_template = "templates/template.docx"
+    if os.path.exists(word_template):
+        print("\n>>> 测试多数据源合并填充 Word 表格（单文档）")
+        if 'merged_data' not in locals():
+            sources = [
+                {"type": "mongo", "collection": "contracts", "query": {"甲方": {"$regex": "源公司"}}},
+                [{"甲方": "硬编码源公司D", "乙方": "测试方", "金额": 20000, "日期": "2025-03-25"}],
+                "output/sample_data.json",
+            ]
+            merged_data = merge_data_sources(sources)
+        try:
+            # 注意：Word 模板中需要包含一个表格，第二行为模板行（含占位符）
+            fill_word_with_data_merged(
+                word_template,
+                merged_data,
+                "output/merged_word.docx",
+                table_index=0,  # 使用第一个表格
+                template_row_index=1  # 第二行作为模板行
+            )
+            print("✅ Word 多数据源合并填充完成：output/merged_word.docx")
+        except Exception as e:
+            print(f"⚠️ Word 合并填充失败：{e}")
+            print("  请确保 Word 模板包含一个表格，且第二行含有占位符（如 {{甲方}}）")
+    else:
+        print("⚠️ Word 模板不存在，跳过 Word 多数据源测试")
 
     #这里是MongDB测试
     db = MongoDBHandler()
