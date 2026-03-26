@@ -9,6 +9,7 @@ from openpyxl import load_workbook
 from pymongo import MongoClient
 from ai_module import extract_entities
 from dotenv import load_dotenv
+from docxtpl import DocxTemplate
 from bson import json_util
 from copy import deepcopy
 
@@ -236,6 +237,14 @@ def fill_word_with_data_merged(template_path, data, output_path, table_index=0, 
 
     doc.save(output_path)
     print(f"合并填充 Word 文件已生成：{output_path}")
+
+#使用 docxtpl 处理半结构化数据
+def fill_word_with_docxtpl(template_path, context, output_path):
+    """使用 docxtpl 渲染模板"""
+    from docxtpl import DocxTemplate
+    doc = DocxTemplate(template_path)
+    doc.render(context)
+    doc.save(output_path)
 
 # MongoDB 操作类
 class MongoDBHandler:
