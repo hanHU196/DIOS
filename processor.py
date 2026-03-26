@@ -4,7 +4,7 @@ import os
 import logging
 from document_reader import DocumentReader
 from excel_handler import fill_excel_with_data, parse_excel_template
-from ai_module import extract_entities
+from ai_module import extract_entities_safe
 from ai_module import parse_instruction  # 导入指令解析函数
 from instruction_parser import InstructionOperator
 
@@ -51,8 +51,8 @@ class DocumentProcessor:
             logger.info(f"📋 模板字段：{fields}")
             
             # 4. 丁提取数据
-            from ai_module import extract_entities
-            data = extract_entities(text, fields)
+            from ai_module import extract_entities_safe
+            data = extract_entities_safe(text, fields)
             logger.info(f"🔍 AI返回数据类型：{type(data)}")
             if isinstance(data, list):
                 logger.info(f"📊 提取到 {len(data)} 条数据")
@@ -107,7 +107,7 @@ class DocumentProcessor:
                     text = self.reader.read(doc_path)
                     
                     # 提取数据
-                    data = extract_entities(text, fields)
+                    data = extract_entities_safe(text, fields)
                     
                     # 合并
                     if isinstance(data, list):

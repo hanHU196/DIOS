@@ -281,41 +281,55 @@ def api_fill():
         if not doc_files or not template_file or not command:
             return jsonify({'error': '请上传文档、模板并输入指令'}), 400
         
-        doc_paths = []
+        # ========== 1. 保存文档 ==========
+        doc_paths = []  # ← 在这里定义！
         for file in doc_files:
             filename = secure_filename(file.filename)
             path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(path)
             doc_paths.append(path)
+            logger.info(f"📄 文档已保存：{filename}")
         
+        # ========== 2. 保存模板 ==========
         template_filename = secure_filename(template_file.filename)
         if not template_filename.endswith('.xlsx'):
             template_filename = template_filename + '.xlsx'
         template_path = os.path.join(app.config['UPLOAD_FOLDER'], 'template_' + template_filename)
         template_file.save(template_path)
+        logger.info(f"📊 模板已保存：{template_filename}")
         
-        from excel_handler import parse_excel_template, fill_excel_with_data
+        # ========== 3. 解析模板字段 ==========
+        from excel_handler import parse_excel_template
         fields = parse_excel_template(template_path)
+        logger.info(f"📋 模板字段：{fields}")
         
+        # ========== 4. 合并所有文档的数据 ==========
         all_data = []
-        for doc_path in doc_paths:
+        for doc_path in doc_paths:  # ← 这里使用 doc_paths
+            logger.info(f"📖 读取文档：{os.path.basename(doc_path)}")
             text = reader.read(doc_path)
             extracted = ai_module.extract_entities(text, fields)
+            
             if isinstance(extracted, list):
                 all_data.extend(extracted)
             elif isinstance(extracted, dict):
                 all_data.append(extracted)
         
+        logger.info(f"📊 合并后共 {len(all_data)} 行数据")
+        
+        # ========== 5. 生成输出文件 ==========
         from datetime import datetime
         output_filename = f"filled_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         output_path = os.path.join('outputs', output_filename)
         os.makedirs('outputs', exist_ok=True)
         
+        from excel_handler import fill_excel_with_data
         fill_excel_with_data(template_path, all_data, output_path)
         
         return send_file(output_path, as_attachment=True, download_name=output_filename)
         
     except Exception as e:
+        logger.error(f"填表失败: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/format', methods=['POST'])

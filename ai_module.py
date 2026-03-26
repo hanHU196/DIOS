@@ -12,19 +12,24 @@ client = ZhipuAI(api_key=ZHIPU_API_KEY)
 
 def extract_entities(text: str, targets: list) -> list:
     """
-    从文本中提取指定的字段值，返回列表，每个元素是一个字典（对应一条记录）。
-    :param text: 输入文本
-    :param targets: 要提取的字段列表，例如 ["甲方", "乙方", "金额"]。如果为空或无效，返回空列表。
-    :return: 列表，如 [{"甲方":"张三","金额":"1000元"}, ...]
+    从文本中提取指定的字段值，返回列表
+    自动选择普通或安全模式
     """
+    MAX_LEN = 4000
+    
+    # 如果文本太长，自动切换到安全模式
+    if len(text) > MAX_LEN:
+        logger.info(f"文本过长 ({len(text)} 字符)，自动切换到安全模式")
+        return extract_entities_safe(text, targets)
+    
     logger.info(f"提取文本长度: {len(text)}，前100字符: {text[:100]}")
+    
     if not isinstance(targets, list) or len(targets) == 0:
         logger.error("targets 必须为非空列表")
         return []
     
     target_str = "、".join(targets)
     
-    # 构造示例，避免索引越界
     if len(targets) >= 2:
         example = f'{{"{targets[0]}": "值1", "{targets[1]}": "值2"}}'
     else:
@@ -54,60 +59,75 @@ def extract_entities(text: str, targets: list) -> list:
     try:
         logger.info(f"调用AI接口提取字段（目标：{target_str}）...")
         response = client.chat.completions.create(
-            model="glm-4",
+            model="glm-4-flash",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
-            max_tokens=16000,
+            max_tokens=4000,
         )
         result_text = response.choices[0].message.content.strip()
-        logger.info(f"AI返回原始内容: {result_text}")
         
-        result = None
         try:
             result = json.loads(result_text)
         except json.JSONDecodeError:
             match = re.search(r'(\[.*\]|\{.*\})', result_text, re.DOTALL)
             if match:
-                try:
-                    result = json.loads(match.group())
-                except json.JSONDecodeError:
-                    pass
+                result = json.loads(match.group())
+            else:
+                return []
         
-        # 确保返回列表
         if isinstance(result, list):
+            logger.info(f"成功提取 {len(result)} 条数据")
             return result
         elif isinstance(result, dict):
-            # 如果是单个对象，包装成列表
             return [result]
         else:
             return []
+            
     except Exception as e:
         logger.error(f"出错: {e}")
         return []
 def extract_entities_safe(text: str, targets: list) -> list:
     """
-    安全提取：自动处理大文件
+    安全提取：按固定长度分段处理大文件（不丢失数据）
     """
-    MAX_LENGTH = 10000  # 每段最大字符数
-
-    if len(text) > MAX_LENGTH:
-        paragraphs = text.split('\n')
-        all_results = []
-        current_chunk = ""
-        for para in paragraphs:
-            if len(current_chunk) + len(para) < MAX_LENGTH:
-                current_chunk += para + '\n'
-            else:
-                if current_chunk:
-                    result = extract_entities(current_chunk, targets)
-                    all_results.extend(result)  # 直接 extend
-                current_chunk = para + '\n'
-        if current_chunk:
-            result = extract_entities(current_chunk, targets)
-            all_results.extend(result)
-        return all_results
-    else:
+    CHUNK_SIZE = 3000  # 每段字符数
+    
+    if len(text) <= CHUNK_SIZE:
         return extract_entities(text, targets)
+    
+    logger.info(f"文本过长 ({len(text)} 字符)，将分段处理")
+    
+    # 按固定长度强制分段
+    chunks = []
+    for i in range(0, len(text), CHUNK_SIZE):
+        chunk = text[i:i + CHUNK_SIZE]
+        # 尽量在句子边界断开
+        if i + CHUNK_SIZE < len(text):
+            boundary = max(
+                chunk.rfind('。'),
+                chunk.rfind('\n'),
+                chunk.rfind('，'),
+                chunk.rfind('、'),
+                chunk.rfind(' ')
+            )
+            if boundary > CHUNK_SIZE // 2:
+                chunk = chunk[:boundary + 1]
+        chunks.append(chunk)
+    
+    logger.info(f"共分为 {len(chunks)} 段")
+    
+    all_results = []
+    for idx, chunk in enumerate(chunks, 1):
+        logger.info(f"处理第 {idx}/{len(chunks)} 段，长度 {len(chunk)}")
+        result = extract_entities(chunk, targets)
+        if isinstance(result, list):
+            all_results.extend(result)
+        elif isinstance(result, dict):
+            all_results.append(result)
+    
+    logger.info(f"分段提取完成，共获取 {len(all_results)} 条数据")
+    return all_results
+
 
 def parse_instruction(instruction: str) -> dict:
     """
@@ -168,7 +188,7 @@ def parse_instruction(instruction: str) -> dict:
     """
     try:
         response = client.chat.completions.create(
-            model="glm-4",
+            model="glm-4-flash",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=300,
@@ -189,6 +209,7 @@ def parse_instruction(instruction: str) -> dict:
         logger.error(f"解析指令出错: {e}")
         return {"intent": "unknown"}
 
+
 if __name__ == "__main__":
     sample_text = "张三向李四借款1000元，于2023年5月1日归还。"
     
@@ -198,6 +219,10 @@ if __name__ == "__main__":
     print("抽取自定义类型：", extract_entities(sample_text, ["借款人", "借款金额"]))
     
     print("传入空列表：", extract_entities(sample_text, []))
+    
+    # 测试分段提取
+    long_text = "这是一段很长的文本。" * 1000
+    print("长文本分段测试：", len(extract_entities_safe(long_text, ["测试"])))
     
     test_instructions = [
         "帮我填一下这个表格",
