@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # 配置
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_DOC_EXTENSIONS = {'txt', 'docx', 'md', 'xlsx'}
-ALLOWED_TEMPLATE_EXTENSIONS = {'xlsx', 'xls'}
+ALLOWED_TEMPLATE_EXTENSIONS = {'xlsx', 'xls','docx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
