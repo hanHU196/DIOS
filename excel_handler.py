@@ -83,6 +83,25 @@ def merge_data_sources(sources):
         else:
             print(f"忽略不支持的数据源类型: {type(src)}")
     return all_data
+
+
+def read_excel_directly(file_path):
+    """
+    直接读取 Excel 文件，返回所有数据
+    不需要 AI，速度快 100 倍
+    """
+    try:
+        # 读取 Excel 文件
+        df = pd.read_excel(file_path)
+        
+        # 转换为字典列表
+        data = df.to_dict('records')
+        
+        print(f"✅ 直接读取 Excel 成功，共 {len(data)} 行数据")
+        return data
+    except Exception as e:
+        print(f"❌ 读取 Excel 失败: {e}")
+        return []
 # Word 工具函数
 def parse_word_template(template_path):
     """

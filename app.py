@@ -273,6 +273,7 @@ def api_extract():
 
 @app.route('/api/fill', methods=['POST'])
 def api_fill():
+    """表格智能填写（支持多文档）"""
     try:
         doc_files = request.files.getlist('documents')
         template_file = request.files.get('template')
@@ -281,8 +282,8 @@ def api_fill():
         if not doc_files or not template_file or not command:
             return jsonify({'error': '请上传文档、模板并输入指令'}), 400
         
-        # ========== 1. 保存文档 ==========
-        doc_paths = []  # ← 在这里定义！
+        # 保存文件
+        doc_paths = []
         for file in doc_files:
             filename = secure_filename(file.filename)
             path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -290,7 +291,6 @@ def api_fill():
             doc_paths.append(path)
             logger.info(f"📄 文档已保存：{filename}")
         
-        # ========== 2. 保存模板 ==========
         template_filename = secure_filename(template_file.filename)
         if not template_filename.endswith('.xlsx'):
             template_filename = template_filename + '.xlsx'
@@ -298,26 +298,61 @@ def api_fill():
         template_file.save(template_path)
         logger.info(f"📊 模板已保存：{template_filename}")
         
-        # ========== 3. 解析模板字段 ==========
+        # 解析模板字段
         from excel_handler import parse_excel_template
         fields = parse_excel_template(template_path)
         logger.info(f"📋 模板字段：{fields}")
         
-        # ========== 4. 合并所有文档的数据 ==========
+        # 解析筛选条件（可选）
+        try:
+            from ai_module import parse_filter_conditions
+            filter_result = parse_filter_conditions(command)
+            filters = filter_result.get('filters', [])
+            logger.info(f"🔍 筛选条件: {filters}")
+        except:
+            filters = []
+            logger.info("🔍 无筛选条件")
+        
+        # 合并所有文档的数据
         all_data = []
-        for doc_path in doc_paths:  # ← 这里使用 doc_paths
-            logger.info(f"📖 读取文档：{os.path.basename(doc_path)}")
-            text = reader.read(doc_path)
-            extracted = ai_module.extract_entities(text, fields)
-            
-            if isinstance(extracted, list):
-                all_data.extend(extracted)
-            elif isinstance(extracted, dict):
-                all_data.append(extracted)
+        for doc_path in doc_paths:
+            if doc_path.endswith('.xlsx') or doc_path.endswith('.xls'):
+                # Excel 文件：直接读取
+                logger.info(f"📊 处理 Excel: {os.path.basename(doc_path)}")
+                df = pd.read_excel(doc_path)
+                logger.info(f"   原始数据: {len(df)} 行")
+                
+                # 应用筛选
+                if filters:
+                    df = apply_filters_to_df(df, filters)
+                    logger.info(f"   筛选后: {len(df)} 行")
+                
+                data = df.to_dict('records')
+                all_data.extend(data)
+                
+            else:
+                # Word/TXT 文件：用 AI 提取
+                logger.info(f"🤖 处理文档: {os.path.basename(doc_path)}")
+                text = reader.read(doc_path)
+                extracted = ai_module.extract_entities_safe(text, fields)
+                
+                # 打印调试
+                if isinstance(extracted, list):
+                    logger.info(f"   AI 提取到 {len(extracted)} 条数据")
+                    if len(extracted) > 0:
+                        logger.info(f"   第一条数据: {extracted[0]}")
+                else:
+                    logger.info(f"   AI 返回类型: {type(extracted)}")
+                
+                # 直接添加，不筛选（Word 数据量小，先保证能填）
+                if isinstance(extracted, list):
+                    all_data.extend(extracted)
+                elif isinstance(extracted, dict):
+                    all_data.append(extracted)
         
         logger.info(f"📊 合并后共 {len(all_data)} 行数据")
         
-        # ========== 5. 生成输出文件 ==========
+        # 生成输出文件
         from datetime import datetime
         output_filename = f"filled_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         output_path = os.path.join('outputs', output_filename)
@@ -330,7 +365,87 @@ def api_fill():
         
     except Exception as e:
         logger.error(f"填表失败: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+
+def apply_filters_to_df(df, filters):
+    """应用筛选条件到 DataFrame"""
+    filtered_df = df.copy()
+    
+    for f in filters:
+        filter_type = f.get('type')
+        column = f.get('column')
+        
+        if column not in filtered_df.columns:
+            logger.warning(f"列 '{column}' 不存在，跳过筛选")
+            continue
+        
+        if filter_type == 'date_range':
+            # 日期范围筛选
+            filtered_df[column] = pd.to_datetime(filtered_df[column], errors='coerce')
+            start = f.get('start')
+            end = f.get('end')
+            mask = (filtered_df[column] >= start) & (filtered_df[column] <= end)
+            filtered_df = filtered_df[mask]
+        
+        elif filter_type == 'numeric':
+            # 数值比较筛选
+            operator = f.get('operator')
+            value = f.get('value')
+            
+            if operator == '>':
+                filtered_df = filtered_df[filtered_df[column] > value]
+            elif operator == '<':
+                filtered_df = filtered_df[filtered_df[column] < value]
+            elif operator == '>=':
+                filtered_df = filtered_df[filtered_df[column] >= value]
+            elif operator == '<=':
+                filtered_df = filtered_df[filtered_df[column] <= value]
+            elif operator == '==':
+                filtered_df = filtered_df[filtered_df[column] == value]
+    
+    return filtered_df
+
+
+def apply_filters_to_data(data_list, filters):
+    """应用筛选条件到字典列表（AI提取的数据）"""
+    filtered = []
+    for item in data_list:
+        match = True
+        for f in filters:
+            filter_type = f.get('type')
+            column = f.get('column')
+            value = item.get(column)
+            
+            if value is None:
+                match = False
+                break
+            
+            if filter_type == 'numeric':
+                operator = f.get('operator')
+                target = f.get('value')
+                try:
+                    num_value = float(value) if isinstance(value, str) else value
+                    if operator == '>' and not (num_value > target):
+                        match = False
+                    elif operator == '<' and not (num_value < target):
+                        match = False
+                    elif operator == '>=' and not (num_value >= target):
+                        match = False
+                    elif operator == '<=' and not (num_value <= target):
+                        match = False
+                except:
+                    match = False
+            elif filter_type == 'date_range':
+                # 日期范围筛选（简化处理）
+                pass
+        
+        if match:
+            filtered.append(item)
+    
+    return filtered
 
 @app.route('/api/format', methods=['POST'])
 def api_format():
