@@ -8,11 +8,14 @@ import pandas as pd
 import numpy as np
 import ai_module
 from document_reader import DocumentReader
+from db_manager import DatabaseManager
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 初始化处理器
 processor = DocumentProcessor()
 reader = DocumentReader()
 app = Flask(__name__)  
+db = DatabaseManager()
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +32,44 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def allowed_file(filename, allowed_set=ALLOWED_DOC_EXTENSIONS):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_set
+
+def parse_fields_from_instruction(instruction):
+    """从指令中解析字段列表"""
+    import re
+    
+    # 匹配 "提取甲方、乙方、金额"
+    match = re.search(r'提取[：:]\s*(.+)', instruction)
+    if not match:
+        match = re.search(r'提取\s*(.+)', instruction)
+    
+    if match:
+        fields_str = match.group(1)
+        # 按中文顿号、逗号、空格分割
+        fields = re.split(r'[、，,\s]+', fields_str)
+        return [f.strip() for f in fields if f.strip()]
+    
+    # 如果没有"提取"关键词，尝试从指令中找中文词
+    words = re.split(r'[、，,\s]+', instruction)
+    return [w for w in words if len(w) >= 2 and not re.search(r'[a-zA-Z0-9]', w)]
+
+def process_word_document(doc_path, fields):
+    """处理单个 Word 文档（用于并行）"""
+    try:
+        text = reader.read(doc_path)
+        
+        # 检查缓存
+        cached = db.get_cached_result(doc_path, fields)
+        if cached:
+            return doc_path, cached, True
+        
+        # AI 提取
+        extracted = ai_module.extract_entities_safe(text, fields)
+        db.save_cache(doc_path, fields, extracted)
+        return doc_path, extracted, False
+        
+    except Exception as e:
+        logger.error(f"处理文档 {doc_path} 失败: {e}")
+        return doc_path, [], False
 
 # ---------- 导入队友模块 ----------
 try:
@@ -226,6 +267,7 @@ def operate_document():
 
 @app.route('/api/extract', methods=['POST'])
 def api_extract():
+    """智能文档提取（增强版）"""
     try:
         files = request.files.getlist('documents')
         command = request.form.get('command', '').strip()
@@ -234,46 +276,64 @@ def api_extract():
             return jsonify({'error': '请上传文档并输入指令'}), 400
         
         doc_paths = []
+        all_text = ""
+        source_files = []
+        
         for file in files:
             filename = secure_filename(file.filename)
             path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(path)
             doc_paths.append(path)
-        
-        all_text = ""
-        for path in doc_paths:
+            source_files.append(filename)
+            
+            # 保存文档信息到数据库
             text = reader.read(path)
-            all_text += f"\n--- {os.path.basename(path)} ---\n{text}\n"
+            db.save_document(filename, path, text[:500])
+            all_text += f"\n--- {filename} ---\n{text}\n"
         
-        def parse_fields(instruction):
-            import re
-            match = re.search(r'提取[：:]\s*(.+)', instruction)
-            if not match:
-                match = re.search(r'提取\s*(.+)', instruction)
-            if match:
-                fields_str = match.group(1)
-                fields = re.split(r'[、，,\s]+', fields_str)
-                return [f.strip() for f in fields if f.strip()]
-            words = re.split(r'[、，,\s]+', instruction)
-            return [w for w in words if len(w) >= 2 and not re.search(r'[a-zA-Z0-9]', w)]
-        
-        fields = parse_fields(command)
+        # 解析字段
+        fields = parse_fields_from_instruction(command)
         if not fields:
             return jsonify({'error': '无法从指令中识别字段'}), 400
         
-        extracted = ai_module.extract_entities(all_text, fields)
+        # 检查缓存
+        cached_result = None
+        for doc_path in doc_paths:
+            cached = db.get_cached_result(doc_path, fields)
+            if cached:
+                cached_result = cached
+                break
+        
+        if cached_result:
+            extracted = cached_result
+            logger.info("📦 使用缓存结果")
+        else:
+            # AI 提取
+            extracted = ai_module.extract_entities(all_text, fields)
+            # 保存缓存
+            for doc_path in doc_paths:
+                db.save_cache(doc_path, fields, extracted)
         
         if isinstance(extracted, dict):
             extracted = [extracted]
         
-        return jsonify({'success': True, 'fields': fields, 'data': extracted})
+        # 保存提取记录
+        db.save_extraction(source_files, fields, extracted, command)
+        
+        return jsonify({
+            'success': True,
+            'fields': fields,
+            'data': extracted,
+            'from_cache': cached_result is not None
+        })
         
     except Exception as e:
+        logger.error(f"提取失败: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/fill', methods=['POST'])
 def api_fill():
-    """表格智能填写（支持多文档）"""
+    """表格智能填写（支持并行处理）"""
     try:
         doc_files = request.files.getlist('documents')
         template_file = request.files.get('template')
@@ -292,75 +352,99 @@ def api_fill():
             logger.info(f"📄 文档已保存：{filename}")
         
         template_filename = secure_filename(template_file.filename)
-        if not template_filename.endswith('.xlsx'):
-            template_filename = template_filename + '.xlsx'
         template_path = os.path.join(app.config['UPLOAD_FOLDER'], 'template_' + template_filename)
         template_file.save(template_path)
         logger.info(f"📊 模板已保存：{template_filename}")
         
+        # 判断模板类型
+        is_word_template = template_filename.endswith('.docx')
+        is_excel_template = template_filename.endswith('.xlsx') or template_filename.endswith('.xls')
+        
+        if not is_word_template and not is_excel_template:
+            return jsonify({'error': '模板格式不支持'}), 400
+        
         # 解析模板字段
-        from excel_handler import parse_excel_template
-        fields = parse_excel_template(template_path)
+        if is_excel_template:
+            from excel_handler import parse_excel_template
+            fields = parse_excel_template(template_path)
+        else:
+            fields = parse_word_template(template_path)
         logger.info(f"📋 模板字段：{fields}")
         
-        # 解析筛选条件（可选）
+        # 筛选条件
+        filters = []
         try:
             from ai_module import parse_filter_conditions
             filter_result = parse_filter_conditions(command)
             filters = filter_result.get('filters', [])
-            logger.info(f"🔍 筛选条件: {filters}")
         except:
-            filters = []
-            logger.info("🔍 无筛选条件")
+            pass
         
-        # 合并所有文档的数据
+        # ========== 并行处理 Word 文档 ==========
         all_data = []
+        word_docs = []
+        excel_data = []
+        
         for doc_path in doc_paths:
             if doc_path.endswith('.xlsx') or doc_path.endswith('.xls'):
-                # Excel 文件：直接读取
-                logger.info(f"📊 处理 Excel: {os.path.basename(doc_path)}")
                 df = pd.read_excel(doc_path)
-                logger.info(f"   原始数据: {len(df)} 行")
-                
-                # 应用筛选
                 if filters:
                     df = apply_filters_to_df(df, filters)
-                    logger.info(f"   筛选后: {len(df)} 行")
-                
-                data = df.to_dict('records')
-                all_data.extend(data)
-                
+                excel_data.extend(df.to_dict('records'))
             else:
-                # Word/TXT 文件：用 AI 提取
-                logger.info(f"🤖 处理文档: {os.path.basename(doc_path)}")
-                text = reader.read(doc_path)
-                extracted = ai_module.extract_entities_safe(text, fields)
+                word_docs.append(doc_path)
+        
+        # 并行处理 Word 文档
+        if word_docs:
+            logger.info(f"🚀 并行处理 {len(word_docs)} 个 Word 文档")
+            
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                futures = {executor.submit(process_word_document, doc, fields): doc 
+                           for doc in word_docs}
                 
-                # 打印调试
-                if isinstance(extracted, list):
-                    logger.info(f"   AI 提取到 {len(extracted)} 条数据")
-                    if len(extracted) > 0:
-                        logger.info(f"   第一条数据: {extracted[0]}")
-                else:
-                    logger.info(f"   AI 返回类型: {type(extracted)}")
-                
-                # 直接添加，不筛选（Word 数据量小，先保证能填）
-                if isinstance(extracted, list):
-                    all_data.extend(extracted)
-                elif isinstance(extracted, dict):
-                    all_data.append(extracted)
+                for future in as_completed(futures):
+                    doc_path, extracted, from_cache = future.result()
+                    logger.info(f"   {'📦 缓存' if from_cache else '🤖 AI'} 完成: {os.path.basename(doc_path)}")
+                    
+                    if isinstance(extracted, list):
+                        all_data.extend(extracted)
+                    elif isinstance(extracted, dict):
+                        all_data.append(extracted)
+        
+        # 添加 Excel 数据
+        all_data.extend(excel_data)
         
         logger.info(f"📊 合并后共 {len(all_data)} 行数据")
         
-        # 生成输出文件
-        from datetime import datetime
-        output_filename = f"filled_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        output_path = os.path.join('outputs', output_filename)
-        os.makedirs('outputs', exist_ok=True)
+        # ========== 生成输出文件 ==========
+        # 用第一个文档名命名
+        first_doc_name = os.path.splitext(os.path.basename(doc_paths[0]))[0]
+
+        if is_excel_template:
+            output_filename = f"{first_doc_name}_填表.xlsx"
+            output_path = os.path.join('outputs', output_filename)
+            os.makedirs('outputs', exist_ok=True)
+            from excel_handler import fill_excel_with_data
+            fill_excel_with_data(template_path, all_data, output_path)
+        else:
+            output_filename = f"{first_doc_name}_填表.docx"
+            output_path = os.path.join('outputs', output_filename)
+            os.makedirs('outputs', exist_ok=True)
+            fill_word_with_data(template_path, all_data, output_path)
         
-        from excel_handler import fill_excel_with_data
-        fill_excel_with_data(template_path, all_data, output_path)
+        # 保存历史
+        try:
+            db.save_fill_history(
+                template=template_filename,
+                doc_count=len(doc_paths),
+                data_count=len(all_data),
+                fields=fields,
+                success=True
+            )
+        except:
+            pass
         
+        # 返回文件
         return send_file(output_path, as_attachment=True, download_name=output_filename)
         
     except Exception as e:
@@ -368,6 +452,80 @@ def api_fill():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+            
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    """获取系统统计信息"""
+    stats = db.get_statistics()
+    return jsonify(stats)
+
+
+@app.route('/api/history', methods=['GET'])
+def get_history():
+    """获取填表历史"""
+    limit = request.args.get('limit', 20, type=int)
+    history = db.get_fill_history(limit)
+    return jsonify({'success': True, 'history': history})
+
+
+@app.route('/api/search', methods=['POST'])
+def search_data():
+    """跨文档搜索"""
+    data = request.get_json()
+    field = data.get('field')
+    value = data.get('value')
+    
+    if not field or not value:
+        return jsonify({'error': '请提供字段和值'}), 400
+    
+    results = db.query_extractions(field, value)
+    return jsonify({
+        'success': True,
+        'count': len(results),
+        'results': results
+    })
+
+def parse_word_template(template_path):
+    """解析 Word 模板中的占位符"""
+    from docx import Document
+    import re
+    doc = Document(template_path)
+    fields = set()
+    
+    for para in doc.paragraphs:
+        matches = re.findall(r'\{\{(.*?)\}\}', para.text)
+        for match in matches:
+            fields.add(match.strip())
+    
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                matches = re.findall(r'\{\{(.*?)\}\}', cell.text)
+                for match in matches:
+                    fields.add(match.strip())
+    
+    return list(fields)
+
+def fill_word_with_data(template_path, data_records, output_path):
+    """填充 Word 模板"""
+    from docx import Document
+    doc = Document(template_path)
+    
+    # 替换占位符
+    for record in data_records:
+        for key, value in record.items():
+            placeholder = f'{{{{{key}}}}}'
+            for para in doc.paragraphs:
+                if placeholder in para.text:
+                    para.text = para.text.replace(placeholder, str(value))
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        if placeholder in cell.text:
+                            cell.text = cell.text.replace(placeholder, str(value))
+    
+    doc.save(output_path)
+    logger.info(f"✅ Word 文件已生成：{output_path}")
 
 
 def apply_filters_to_df(df, filters):

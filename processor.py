@@ -8,6 +8,7 @@ from excel_handler import fill_excel_with_data, parse_excel_template
 from ai_module import extract_entities_safe
 from ai_module import parse_instruction  # 导入指令解析函数
 from instruction_parser import InstructionOperator
+from ai_module import extract_entities_safe_parallel
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -55,7 +56,7 @@ class DocumentProcessor:
             
             # 4. 丁提取数据
             from ai_module import extract_entities_safe
-            data = extract_entities_safe(text, fields)
+            data = extract_entities_safe_parallel(text, fields, max_workers=4)
             logger.info(f"🔍 AI返回数据类型：{type(data)}")
             if isinstance(data, list):
                 logger.info(f"📊 提取到 {len(data)} 条数据")

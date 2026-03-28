@@ -2,7 +2,7 @@ import json
 import logging
 import re
 from openai import OpenAI
-
+from concurrent.futures import ThreadPoolExecutor, as_completed
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -157,7 +157,60 @@ def extract_entities_safe(text: str, targets: list) -> list:
     logger.info(f"分段提取完成，共获取 {len(all_results)} 条数据")
     return all_results
 
-
+def extract_entities_safe_parallel(text: str, targets: list, max_workers=4) -> list:
+    """
+    并行分段处理大文件
+    max_workers: 同时处理的段数（建议 4-8）
+    """
+    CHUNK_SIZE = 3000  # 每段字符数
+    
+    if len(text) <= CHUNK_SIZE:
+        return extract_entities(text, targets)
+    
+    logger.info(f"文本过长 ({len(text)} 字符)，将分段并行处理 (workers={max_workers})")
+    
+    # 1. 分段
+    chunks = []
+    for i in range(0, len(text), CHUNK_SIZE):
+        chunk = text[i:i + CHUNK_SIZE]
+        # 尽量在句子边界断开
+        if i + CHUNK_SIZE < len(text):
+            boundary = max(
+                chunk.rfind('。'),
+                chunk.rfind('\n'),
+                chunk.rfind('，'),
+                chunk.rfind('、'),
+                chunk.rfind(' ')
+            )
+            if boundary > CHUNK_SIZE // 2:
+                chunk = chunk[:boundary + 1]
+        chunks.append(chunk)
+    
+    logger.info(f"共分为 {len(chunks)} 段")
+    
+    # 2. 并行处理
+    all_results = []
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # 提交所有任务
+        futures = {executor.submit(extract_entities, chunk, targets): idx 
+                   for idx, chunk in enumerate(chunks)}
+        
+        # 收集结果
+        for future in as_completed(futures):
+            idx = futures[future]
+            try:
+                result = future.result()
+                if isinstance(result, list):
+                    all_results.extend(result)
+                elif isinstance(result, dict):
+                    all_results.append(result)
+                logger.info(f"  ✅ 第 {idx+1}/{len(chunks)} 段完成，当前共 {len(all_results)} 条")
+            except Exception as e:
+                logger.error(f"  ❌ 第 {idx+1} 段处理失败: {e}")
+    
+    logger.info(f"并行分段提取完成，共获取 {len(all_results)} 条数据")
+    return all_results
 # ==================== 指令解析函数 ====================
 def parse_instruction(instruction: str) -> dict:
     """
