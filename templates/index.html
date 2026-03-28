@@ -3,198 +3,316 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>DocMind · 文档智能处理系统</title>
+    <title>DocMind · 精密文档智能引擎</title>
     <style>
-        /* ---------- 设计 Token ---------- */
-        :root {
-            --background: 255 255 255;
-            --foreground: 10 10 10;
-            --card: 255 255 255;
-            --card-foreground: 10 10 10;
-            --border: 229 231 235;
-            --input: 249 250 251;
-            --ring: 37 99 235;
-            --primary: 37 99 235;
-            --primary-foreground: 255 255 255;
-            --secondary: 243 244 246;
-            --secondary-foreground: 31 41 55;
-            --muted: 243 244 246;
-            --muted-foreground: 107 114 128;
-
-            --spacing-1: 4px;
-            --spacing-2: 8px;
-            --spacing-3: 12px;
-            --spacing-4: 16px;
-            --spacing-6: 24px;
-            --spacing-8: 32px;
-            --spacing-10: 40px;
-            --spacing-12: 48px;
-
-            --radius: 10px;
-            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
-
-            --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            --text-xs: 12px;
-            --text-sm: 14px;
-            --text-base: 16px;
-            --text-lg: 20px;
-            --text-xl: 24px;
-            --text-2xl: 32px;
-            --leading-tight: 1.4;
-            --leading-normal: 1.6;
-        }
-
-        .dark {
-            --background: 10 10 10;
-            --foreground: 237 237 237;
-            --card: 17 17 17;
-            --card-foreground: 237 237 237;
-            --border: 45 45 45;
-            --input: 31 31 31;
-            --ring: 59 130 246;
-            --primary: 59 130 246;
-            --primary-foreground: 255 255 255;
-            --secondary: 31 31 31;
-            --secondary-foreground: 209 213 219;
-            --muted: 31 31 31;
-            --muted-foreground: 156 163 175;
-        }
-
+        /* ---------- 设计系统 · 瑞士极致纯净 ---------- */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
+        :root {
+            /* 极致克制调色板 */
+            --bg-base: #FFFFFF;
+            --bg-subtle: #F9FAFB;
+            --surface-card: #FFFFFF;
+            --border-light: #EDF2F7;
+            --border-focus: #CBD5E1;
+            --text-primary: #1A2C3E;
+            --text-secondary: #5B6E8C;
+            --text-placeholder: #9AA9BF;
+            --accent-solid: #2C3E66;
+            --accent-hover: #1F2F4D;
+            --accent-soft: #F1F4F9;
+            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.03);
+            --shadow-md: 0 12px 24px -12px rgba(0, 0, 0, 0.08), 0 4px 8px -4px rgba(0, 0, 0, 0.02);
+            --shadow-lg: 0 20px 32px -12px rgba(0, 0, 0, 0.12);
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-xl: 20px;
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            --transition: all 0.3s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+        }
+
+        .dark {
+            --bg-base: #11161F;
+            --bg-subtle: #151E2A;
+            --surface-card: #1A232F;
+            --border-light: #2A3442;
+            --border-focus: #4A5A72;
+            --text-primary: #EFF3F8;
+            --text-secondary: #A3B3CC;
+            --text-placeholder: #65748C;
+            --accent-solid: #6A85B0;
+            --accent-hover: #819BBB;
+            --accent-soft: #232E3C;
+            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
+            --shadow-md: 0 12px 24px -12px rgba(0, 0, 0, 0.4);
+        }
+
         body {
-            background-color: rgb(var(--background));
-            color: rgb(var(--foreground));
+            background-color: var(--bg-base);
+            color: var(--text-primary);
             font-family: var(--font-sans);
-            font-size: var(--text-base);
-            line-height: var(--leading-normal);
-            transition: background-color 0.2s, color 0.2s;
+            font-size: 15px;
+            line-height: 1.5;
+            font-weight: 440;
+            letter-spacing: -0.01em;
+            -webkit-font-smoothing: antialiased;
+            transition: background-color 0.3s ease, color 0.2s ease;
         }
 
+        /* 容器与公用 */
         .container {
-            max-width: 1200px;
+            max-width: 1280px;
             margin: 0 auto;
-            padding-left: var(--spacing-6);
-            padding-right: var(--spacing-6);
+            padding: 0 32px;
         }
 
+        /* 封面页样式 —— 纯净水疗氛围 */
+        .cover {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 48px 24px;
+            background: var(--bg-base);
+            position: relative;
+            z-index: 10;
+            transition: opacity 0.6s ease, visibility 0.6s;
+        }
+        .cover.hidden {
+            opacity: 0;
+            visibility: hidden;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            pointer-events: none;
+        }
+        .cover-content {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .cover-header {
+            text-align: center;
+            margin-bottom: 64px;
+        }
+        .cover-logo {
+            font-size: 44px;
+            font-weight: 520;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+        }
+        .cover-tagline {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            max-width: 580px;
+            margin: 0 auto;
+            font-weight: 420;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+            margin: 56px 0 64px;
+        }
+        .feature-card {
+            background: var(--surface-card);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-xl);
+            padding: 32px 24px;
+            transition: var(--transition);
+            text-align: center;
+        }
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+            border-color: var(--border-focus);
+        }
+        .feature-icon {
+            margin-bottom: 24px;
+            display: inline-flex;
+            justify-content: center;
+            width: 64px;
+            height: 64px;
+            align-items: center;
+        }
+        .feature-icon svg {
+            width: 48px;
+            height: 48px;
+            stroke: var(--accent-solid);
+            stroke-width: 1.25;
+            fill: none;
+        }
+        .feature-title {
+            font-size: 1.5rem;
+            font-weight: 520;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+        .feature-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .enter-button {
+            display: flex;
+            justify-content: center;
+            margin-top: 24px;
+        }
+        .btn-enter {
+            background: var(--accent-solid);
+            border: none;
+            padding: 14px 48px;
+            border-radius: 48px;
+            font-size: 1rem;
+            font-weight: 500;
+            color: white;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: var(--shadow-sm);
+        }
+        .btn-enter:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .btn-enter:active {
+            transform: translateY(1px);
+        }
+
+        /* 主应用区域（原有内容）初始隐藏 */
+        .main-app {
+            transition: opacity 0.5s ease;
+            opacity: 1;
+        }
+        .main-app.hidden {
+            display: none;
+        }
+
+        /* 以下为原有样式，微调保证一致性 */
         .header {
-            border-bottom: 1px solid rgb(var(--border));
-            padding: var(--spacing-4) 0;
+            padding: 28px 0 20px 0;
+            border-bottom: 1px solid var(--border-light);
+            margin-bottom: 8px;
         }
         .header-content {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-end;
         }
         .logo {
-            font-size: var(--text-xl);
-            font-weight: 600;
+            font-size: 26px;
+            font-weight: 520;
             letter-spacing: -0.02em;
+            color: var(--text-primary);
+            text-decoration: none;
+            background: none;
+            line-height: 1;
+        }
+        .logo span {
+            font-weight: 460;
+            color: var(--text-secondary);
         }
         .theme-toggle {
-            background: none;
+            background: transparent;
             border: none;
             cursor: pointer;
-            padding: var(--spacing-2);
-            border-radius: 9999px;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: rgb(var(--foreground));
-            transition: background-color 0.2s;
+            color: var(--text-secondary);
+            transition: var(--transition);
         }
         .theme-toggle:hover {
-            background-color: rgb(var(--secondary));
+            background-color: var(--accent-soft);
+            color: var(--text-primary);
         }
-
         .menu {
             display: flex;
-            gap: var(--spacing-4);
-            border-bottom: 1px solid rgb(var(--border));
-            margin-top: var(--spacing-8);
+            gap: 36px;
+            border-bottom: 1px solid var(--border-light);
+            margin: 32px 0 28px 0;
         }
         .menu-item {
             background: none;
             border: none;
-            padding: var(--spacing-3) var(--spacing-2);
-            font-size: var(--text-sm);
-            font-weight: 500;
-            color: rgb(var(--muted-foreground));
+            padding: 0 0 12px 0;
+            font-size: 0.95rem;
+            font-weight: 480;
+            color: var(--text-secondary);
             cursor: pointer;
-            transition: color 0.2s, border-color 0.2s;
+            transition: var(--transition);
             border-bottom: 2px solid transparent;
+            letter-spacing: -0.2px;
         }
         .menu-item.active {
-            color: rgb(var(--primary));
-            border-bottom-color: rgb(var(--primary));
+            color: var(--accent-solid);
+            border-bottom-color: var(--accent-solid);
+            font-weight: 510;
         }
-        .menu-item:hover:not(.active) {
-            color: rgb(var(--foreground));
-        }
-
-        .content {
-            padding-top: var(--spacing-8);
-            padding-bottom: var(--spacing-12);
-        }
-
         .card {
-            background-color: rgb(var(--card));
-            border: 1px solid rgb(var(--border));
-            border-radius: var(--radius);
+            background-color: var(--surface-card);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-xl);
+            padding: 36px 40px;
+            transition: var(--transition);
             box-shadow: var(--shadow-sm);
-            padding: var(--spacing-6);
-            transition: box-shadow 0.2s;
         }
         .card:hover {
             box-shadow: var(--shadow-md);
         }
         .card-header {
-            margin-bottom: var(--spacing-6);
+            margin-bottom: 32px;
         }
         .card-title {
-            font-size: var(--text-xl);
-            font-weight: 600;
-            line-height: var(--leading-tight);
-            color: rgb(var(--foreground));
+            font-size: 24px;
+            font-weight: 520;
+            line-height: 1.3;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+            margin-bottom: 8px;
         }
         .card-description {
-            font-size: var(--text-sm);
-            color: rgb(var(--muted-foreground));
-            margin-top: var(--spacing-1);
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
         }
         .card-sub {
-            font-size: var(--text-sm);
-            color: rgb(var(--muted-foreground));
-            margin-top: var(--spacing-1);
+            font-size: 0.8rem;
+            color: var(--text-placeholder);
+            margin-top: 8px;
         }
-
         .form-group {
-            margin-bottom: var(--spacing-6);
+            margin-bottom: 28px;
         }
         .form-label {
             display: block;
-            font-size: var(--text-sm);
-            font-weight: 500;
-            margin-bottom: var(--spacing-2);
+            font-size: 0.85rem;
+            font-weight: 490;
+            margin-bottom: 8px;
+            color: var(--text-primary);
         }
         .file-area {
-            border: 1px dashed rgb(var(--border));
-            border-radius: var(--radius);
-            padding: var(--spacing-4);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 28px 20px;
             text-align: center;
             cursor: pointer;
-            transition: background-color 0.2s, border-color 0.2s;
-            background-color: rgb(var(--input));
+            transition: var(--transition);
+            background-color: var(--bg-subtle);
         }
         .file-area:hover {
-            background-color: rgba(var(--secondary), 0.5);
-            border-color: rgb(var(--primary));
+            border-color: var(--accent-solid);
+            background-color: var(--accent-soft);
         }
         .file-input {
             display: none;
@@ -203,236 +321,380 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: var(--spacing-2);
+            gap: 14px;
         }
         .file-area-icon svg {
-            width: 20px;
-            height: 20px;
-            stroke: rgb(var(--muted-foreground));
+            width: 36px;
+            height: 36px;
+            stroke: var(--text-secondary);
+            stroke-width: 1.25;
+            fill: none;
+        }
+        .file-area:hover svg {
+            stroke: var(--accent-solid);
         }
         .file-info {
-            font-size: var(--text-sm);
-            color: rgb(var(--muted-foreground));
+            font-size: 0.85rem;
+            color: var(--text-secondary);
         }
         .input {
             width: 100%;
-            height: 40px;
-            padding: 0 var(--spacing-3);
-            border: 1px solid rgb(var(--border));
-            border-radius: var(--radius);
-            background-color: rgb(var(--input));
-            color: rgb(var(--foreground));
-            font-size: var(--text-sm);
+            height: 48px;
+            padding: 0 18px;
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-sm);
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            font-family: var(--font-sans);
+            transition: var(--transition);
             outline: none;
-            transition: border-color 0.2s, box-shadow 0.2s;
         }
         .input:focus {
-            border-color: rgb(var(--ring));
-            box-shadow: 0 0 0 2px rgba(var(--ring), 0.2);
+            border-color: var(--accent-solid);
+            box-shadow: 0 0 0 2px rgba(44, 62, 102, 0.1);
         }
         .btn {
-            height: 40px;
-            padding: 0 var(--spacing-4);
+            height: 48px;
+            padding: 0 28px;
             border: none;
-            border-radius: var(--radius);
-            font-size: var(--text-sm);
+            border-radius: 40px;
+            font-size: 0.9rem;
             font-weight: 500;
+            letter-spacing: 0.2px;
             cursor: pointer;
-            transition: background-color 0.2s, opacity 0.2s;
-            background-color: rgb(var(--primary));
-            color: rgb(var(--primary-foreground));
+            transition: var(--transition);
+            background-color: var(--accent-solid);
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
         .btn:hover {
-            background-color: rgba(var(--primary), 0.9);
+            background-color: var(--accent-hover);
+            transform: translateY(-1px);
         }
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
         .result-area {
-            margin-top: var(--spacing-6);
-            padding-top: var(--spacing-6);
-            border-top: 1px solid rgb(var(--border));
+            margin-top: 36px;
+            padding-top: 28px;
+            border-top: 1px solid var(--border-light);
         }
         .result-title {
-            font-size: var(--text-sm);
-            font-weight: 500;
-            margin-bottom: var(--spacing-2);
+            font-size: 0.85rem;
+            font-weight: 520;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 16px;
+            color: var(--text-secondary);
         }
         .result-content {
-            background-color: rgb(var(--muted));
-            border-radius: var(--radius);
-            padding: var(--spacing-3);
-            font-size: var(--text-sm);
+            background-color: var(--bg-subtle);
+            border-radius: var(--radius-md);
+            padding: 20px 24px;
+            font-size: 0.85rem;
+            font-family: 'SF Mono', monospace;
             overflow-x: auto;
+            border: 1px solid var(--border-light);
+            white-space: pre-wrap;
+            word-break: break-word;
         }
         .download-link {
             display: inline-flex;
             align-items: center;
-            gap: var(--spacing-2);
-            color: rgb(var(--primary));
+            gap: 10px;
+            background: transparent;
+            padding: 10px 0;
+            color: var(--accent-solid);
             text-decoration: none;
-            font-size: var(--text-sm);
+            font-size: 0.9rem;
+            font-weight: 490;
+            border-bottom: 1px solid transparent;
+            transition: var(--transition);
         }
         .download-link:hover {
-            text-decoration: underline;
+            border-bottom-color: var(--accent-solid);
+            gap: 12px;
         }
         .error-message {
-            color: #ef4444;
-            font-size: var(--text-sm);
-            margin-top: var(--spacing-2);
+            background: rgba(239, 68, 68, 0.05);
+            color: #C2412C;
+            font-size: 0.85rem;
+            margin-top: 20px;
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            border-left: 2px solid #C2412C;
+        }
+        .dark .error-message {
+            background: rgba(220, 38, 38, 0.08);
+            color: #F9ACAC;
+            border-left-color: #F87171;
         }
         .hidden {
             display: none;
         }
+        .btn.loading {
+            position: relative;
+            color: transparent !important;
+        }
+        .btn.loading::after {
+            content: "";
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border: 1.8px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        @media (max-width: 900px) {
+            .features-grid {
+                gap: 24px;
+            }
+            .feature-card {
+                padding: 24px 18px;
+            }
+        }
+        @media (max-width: 720px) {
+            .features-grid {
+                grid-template-columns: 1fr;
+                max-width: 480px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+            .cover-logo {
+                font-size: 36px;
+            }
+            .card {
+                padding: 28px 24px;
+            }
+            .menu {
+                gap: 24px;
+            }
+            .btn {
+                width: 100%;
+            }
+        }
+        @media (max-width: 560px) {
+            .container {
+                padding: 0 20px;
+            }
+            .card {
+                padding: 24px 18px;
+            }
+            .menu {
+                gap: 18px;
+                overflow-x: auto;
+                white-space: nowrap;
+                padding-bottom: 4px;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="header-content">
-                <div class="logo">DocMind</div>
-                <button class="theme-toggle" id="themeToggle" aria-label="切换主题">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="5"/>
-                        <line x1="12" y1="1" x2="12" y2="3"/>
-                        <line x1="12" y1="21" x2="12" y2="23"/>
-                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-                        <line x1="1" y1="12" x2="3" y2="12"/>
-                        <line x1="21" y1="12" x2="23" y2="12"/>
-                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-                    </svg>
-                </button>
+    <!-- 封面页 -->
+    <div id="cover" class="cover">
+        <div class="cover-content">
+            <div class="cover-header">
+                <div class="cover-logo">DocMind</div>
+                <div class="cover-tagline">精密文档智能引擎 · 重塑信息处理边界</div>
+            </div>
+            <div class="features-grid">
+                <!-- 功能1：智能文档提取 -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                            <polyline points="10 9 9 9 8 9" />
+                        </svg>
+                    </div>
+                    <div class="feature-title">智能文档提取</div>
+                    <div class="feature-desc">自动识别关键实体，支持多文档合并分析，输出结构化数据。</div>
+                </div>
+                <!-- 功能2：表格智能填写 -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                            <line x1="3" y1="9" x2="21" y2="9" />
+                            <line x1="3" y1="15" x2="21" y2="15" />
+                            <line x1="9" y1="21" x2="9" y2="9" />
+                            <line x1="15" y1="21" x2="15" y2="9" />
+                        </svg>
+                    </div>
+                    <div class="feature-title">表格智能填写</div>
+                    <div class="feature-desc">基于文档内容自动填充 Excel 模板，智能映射字段，一键生成。</div>
+                </div>
+                <!-- 功能3：文档格式调整 -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                            <circle cx="12" cy="12" r="3" />
+                        </svg>
+                    </div>
+                    <div class="feature-title">文档格式调整</div>
+                    <div class="feature-desc">自然语言指令调整排版、对齐、字体，精准控制 Word 样式。</div>
+                </div>
+            </div>
+            <div class="enter-button">
+                <button id="enterAppBtn" class="btn-enter">进入工作区</button>
             </div>
         </div>
+    </div>
 
-        <div class="menu">
-            <button class="menu-item active" data-tab="extract">智能文档提取</button>
-            <button class="menu-item" data-tab="fill">表格智能填写</button>
-            <button class="menu-item" data-tab="format">文档格式调整</button>
-        </div>
-
-        <div class="content">
-            <!-- 卡片1：智能文档提取 -->
-            <div id="extractCard" class="card">
-                <div class="card-header">
-                    <div class="card-title">智能文档提取</div>
-                    <div class="card-description">自动识别关键实体，支持多文档合并分析</div>
-                    <div class="card-sub">支持格式：txt, docx, md, xlsx</div>
+    <!-- 主应用区域（原有完整界面） -->
+    <div id="mainApp" class="main-app hidden">
+        <div class="container">
+            <div class="header">
+                <div class="header-content">
+                    <div class="logo">DocMind <span>· intelligence</span></div>
+                    <button class="theme-toggle" id="themeToggle" aria-label="切换明暗主题">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                        </svg>
+                    </button>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">上传文档（可多选）</label>
-                    <div class="file-area" id="extractFileArea">
-                        <input type="file" id="extractFiles" multiple accept=".txt,.docx,.md,.xlsx" class="file-input">
-                        <div class="file-area-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polygon points="17 8 12 3 7 8 17 8" />
-                                <line x1="12" y1="3" x2="12" y2="15" />
-                            </svg>
-                            <span class="file-info" id="extractFileInfo">点击或拖拽上传文件</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">提取指令</label>
-                    <input type="text" id="extractCommand" class="input" placeholder="例如：提取甲方、乙方、金额">
-                    <div class="card-sub" style="margin-top: var(--spacing-1);">可使用“提取”开头，后接字段名（逗号/顿号分隔）</div>
-                </div>
-                <button class="btn" id="extractSubmitBtn">开始提取</button>
-                <div id="extractResult" class="result-area hidden">
-                    <div class="result-title">提取结果</div>
-                    <pre class="result-content" id="extractResultContent"></pre>
-                </div>
-                <div id="extractError" class="error-message hidden"></div>
             </div>
 
-            <!-- 卡片2：表格智能填写 -->
-            <div id="fillCard" class="card hidden">
-                <div class="card-header">
-                    <div class="card-title">表格智能填写</div>
-                    <div class="card-description">基于文档内容自动填充 Excel 模板</div>
-                    <div class="card-sub">支持多文档合并，填充结果可下载</div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">上传文档（可多选）</label>
-                    <div class="file-area" id="fillDocArea">
-                        <input type="file" id="fillDocs" multiple accept=".txt,.docx,.md,.xlsx" class="file-input">
-                        <div class="file-area-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                            </svg>
-                            <span class="file-info" id="fillDocInfo">点击或拖拽上传文档</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">上传 Excel 模板</label>
-                    <div class="file-area" id="fillTemplateArea">
-                        <input type="file" id="fillTemplate" accept=".xlsx,.xls" class="file-input">
-                        <div class="file-area-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                            </svg>
-                            <span class="file-info" id="fillTemplateInfo">点击上传 Excel 模板</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">填充指令</label>
-                    <input type="text" id="fillCommand" class="input" placeholder="例如：提取甲方、乙方、金额">
-                    <div class="card-sub" style="margin-top: var(--spacing-1);">指定要提取的字段，将自动匹配模板表头</div>
-                </div>
-                <button class="btn" id="fillSubmitBtn">生成并下载 Excel</button>
-                <div id="fillResult" class="result-area hidden">
-                    <div class="result-title">下载链接</div>
-                    <a href="#" id="downloadLink" class="download-link" download>点击下载生成的表格</a>
-                </div>
-                <div id="fillError" class="error-message hidden"></div>
+            <div class="menu">
+                <button class="menu-item active" data-tab="extract">智能文档提取</button>
+                <button class="menu-item" data-tab="fill">表格智能填写</button>
+                <button class="menu-item" data-tab="format">文档格式调整</button>
             </div>
 
-            <!-- 卡片3：文档格式调整（模块1） -->
-            <div id="formatCard" class="card hidden">
-                <div class="card-header">
-                    <div class="card-title">文档格式调整</div>
-                    <div class="card-description">通过自然语言指令调整文档排版、对齐、字体等格式</div>
-                    <div class="card-sub">支持 Word 文档（.docx），如“将所有段落居中”、“将标题加粗”</div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">上传文档</label>
-                    <div class="file-area" id="formatFileArea">
-                        <input type="file" id="formatFile" accept=".docx" class="file-input">
-                        <div class="file-area-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                            </svg>
-                            <span class="file-info" id="formatFileInfo">点击上传 Word 文档 (.docx)</span>
+            <div class="content">
+                <!-- 卡片1：智能文档提取 -->
+                <div id="extractCard" class="card">
+                    <div class="card-header">
+                        <div class="card-title">智能文档提取</div>
+                        <div class="card-description">结构化抽取关键实体，支持多文档并行分析</div>
+                        <div class="card-sub">支持 .txt, .docx, .md, .xlsx</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">上传文档</label>
+                        <div class="file-area" id="extractFileArea">
+                            <input type="file" id="extractFiles" multiple accept=".txt,.docx,.md,.xlsx" class="file-input">
+                            <div class="file-area-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                                    <polyline points="13 2 13 9 20 9" />
+                                </svg>
+                                <span class="file-info" id="extractFileInfo">点击或拖拽文件至此</span>
+                            </div>
                         </div>
                     </div>
+                    <div class="form-group">
+                        <label class="form-label">提取指令</label>
+                        <input type="text" id="extractCommand" class="input" placeholder="例如：提取甲方、乙方、合同金额">
+                        <div class="card-sub">使用逗号或顿号分隔字段名</div>
+                    </div>
+                    <button class="btn" id="extractSubmitBtn">开始提取</button>
+                    <div id="extractResult" class="result-area hidden">
+                        <div class="result-title">结构化结果</div>
+                        <pre class="result-content" id="extractResultContent"></pre>
+                    </div>
+                    <div id="extractError" class="error-message hidden"></div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">格式指令</label>
-                    <input type="text" id="formatCommand" class="input" placeholder="例如：将所有段落居中、将标题加粗、设置字体为宋体">
-                    <div class="card-sub" style="margin-top: var(--spacing-1);">支持：居中、左对齐、右对齐、加粗、斜体、字体、字号等</div>
+
+                <!-- 卡片2：表格智能填写 -->
+                <div id="fillCard" class="card hidden">
+                    <div class="card-header">
+                        <div class="card-title">表格智能填写</div>
+                        <div class="card-description">基于文档内容自动填充 Excel 模板，智能映射字段</div>
+                        <div class="card-sub">支持多文档合并填充，输出标准表格</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">上传源文档</label>
+                        <div class="file-area" id="fillDocArea">
+                            <input type="file" id="fillDocs" multiple accept=".txt,.docx,.md,.xlsx" class="file-input">
+                            <div class="file-area-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                </svg>
+                                <span class="file-info" id="fillDocInfo">点击或拖拽文档</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Excel 模板</label>
+                        <div class="file-area" id="fillTemplateArea">
+                            <input type="file" id="fillTemplate" accept=".xlsx,.xls" class="file-input">
+                            <div class="file-area-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
+                                    <line x1="8" y1="7" x2="16" y2="7" />
+                                    <line x1="8" y1="11" x2="16" y2="11" />
+                                    <line x1="8" y1="15" x2="12" y2="15" />
+                                </svg>
+                                <span class="file-info" id="fillTemplateInfo">上传 Excel 模板</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">字段指令</label>
+                        <input type="text" id="fillCommand" class="input" placeholder="例如：提取甲方、乙方、金额、日期">
+                        <div class="card-sub">指令将自动匹配模板表头</div>
+                    </div>
+                    <button class="btn" id="fillSubmitBtn">生成并下载表格</button>
+                    <div id="fillResult" class="result-area hidden">
+                        <div class="result-title">就绪</div>
+                        <a href="#" id="downloadLink" class="download-link" download>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                            下载 Excel 文件
+                        </a>
+                    </div>
+                    <div id="fillError" class="error-message hidden"></div>
                 </div>
-                <button class="btn" id="formatSubmitBtn">应用格式并下载</button>
-                <div id="formatResult" class="result-area hidden">
-                    <div class="result-title">处理完成</div>
-                    <a href="#" id="formatDownloadLink" class="download-link" download>点击下载处理后的文档</a>
+
+                <!-- 卡片3：文档格式调整 -->
+                <div id="formatCard" class="card hidden">
+                    <div class="card-header">
+                        <div class="card-title">文档格式调整</div>
+                        <div class="card-description">自然语言指令调整排版、对齐、字体样式</div>
+                        <div class="card-sub">支持 .docx 文档，指令示例：“所有段落居中”、“标题加粗”</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Word 文档</label>
+                        <div class="file-area" id="formatFileArea">
+                            <input type="file" id="formatFile" accept=".docx" class="file-input">
+                            <div class="file-area-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                </svg>
+                                <span class="file-info" id="formatFileInfo">上传 .docx 文件</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">格式指令</label>
+                        <input type="text" id="formatCommand" class="input" placeholder="例如：将所有段落居中、将标题加粗、字体思源黑体">
+                        <div class="card-sub">支持对齐、加粗、斜体、字体、字号</div>
+                    </div>
+                    <button class="btn" id="formatSubmitBtn">应用格式并下载</button>
+                    <div id="formatResult" class="result-area hidden">
+                        <div class="result-title">文档已处理</div>
+                        <a href="#" id="formatDownloadLink" class="download-link" download>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                            下载新文档
+                        </a>
+                    </div>
+                    <div id="formatError" class="error-message hidden"></div>
                 </div>
-                <div id="formatError" class="error-message hidden"></div>
             </div>
         </div>
     </div>
 
     <script>
-        // 主题切换
+        // ---------- 主题切换 ----------
         const themeToggle = document.getElementById('themeToggle');
         const setTheme = (theme) => {
             if (theme === 'dark') {
@@ -449,12 +711,28 @@
         } else {
             setTheme('light');
         }
-        themeToggle.addEventListener('click', () => {
-            const isDark = document.documentElement.classList.contains('dark');
-            setTheme(isDark ? 'light' : 'dark');
-        });
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                const isDark = document.documentElement.classList.contains('dark');
+                setTheme(isDark ? 'light' : 'dark');
+            });
+        }
 
-        // 菜单切换
+        // ---------- 封面切换到主应用 ----------
+        const cover = document.getElementById('cover');
+        const mainApp = document.getElementById('mainApp');
+        const enterBtn = document.getElementById('enterAppBtn');
+        if (enterBtn) {
+            enterBtn.addEventListener('click', () => {
+                cover.classList.add('hidden');
+                mainApp.classList.remove('hidden');
+                // 可选：平滑滚动至顶部
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        }
+
+        // ---------- 原有交互逻辑（完整保留） ----------
+        // 选项卡切换
         const extractCard = document.getElementById('extractCard');
         const fillCard = document.getElementById('fillCard');
         const formatCard = document.getElementById('formatCard');
@@ -475,21 +753,21 @@
             item.addEventListener('click', () => switchTab(item.dataset.tab));
         });
 
-        // 辅助函数：更新文件列表显示
-        function updateFileInfo(inputElement, infoElement, multiple = true) {
+        // 通用文件信息更新
+        function updateFileInfoMulti(inputElement, infoElement, multiple = true) {
             const files = inputElement.files;
             if (files.length === 0) {
-                infoElement.textContent = multiple ? '点击或拖拽上传文件' : '点击上传文件';
+                infoElement.textContent = multiple ? '点击或拖拽文件至此' : '点击上传文件';
                 return;
             }
-            if (multiple) {
+            if (multiple && files.length > 1) {
                 infoElement.textContent = `${files.length} 个文件已选择`;
             } else {
                 infoElement.textContent = files[0].name;
             }
         }
 
-        // ---------- 智能文档提取 ----------
+        // 提取模块
         const extractFiles = document.getElementById('extractFiles');
         const extractFileInfo = document.getElementById('extractFileInfo');
         const extractCommand = document.getElementById('extractCommand');
@@ -497,7 +775,7 @@
         const extractResultDiv = document.getElementById('extractResult');
         const extractResultContent = document.getElementById('extractResultContent');
         const extractError = document.getElementById('extractError');
-        extractFiles.addEventListener('change', () => updateFileInfo(extractFiles, extractFileInfo, true));
+        extractFiles.addEventListener('change', () => updateFileInfoMulti(extractFiles, extractFileInfo, true));
         document.getElementById('extractFileArea').addEventListener('click', () => extractFiles.click());
         extractSubmit.addEventListener('click', async () => {
             const files = extractFiles.files;
@@ -510,7 +788,8 @@
             extractError.classList.add('hidden');
             extractResultDiv.classList.add('hidden');
             extractSubmit.disabled = true;
-            extractSubmit.textContent = '提取中...';
+            extractSubmit.classList.add('loading');
+            extractSubmit.textContent = '提取中';
             const formData = new FormData();
             for (let i = 0; i < files.length; i++) formData.append('documents', files[i]);
             formData.append('command', command);
@@ -525,11 +804,12 @@
                 extractError.classList.remove('hidden');
             } finally {
                 extractSubmit.disabled = false;
+                extractSubmit.classList.remove('loading');
                 extractSubmit.textContent = '开始提取';
             }
         });
 
-        // ---------- 表格智能填写 ----------
+        // 表格填写模块
         const fillDocs = document.getElementById('fillDocs');
         const fillDocInfo = document.getElementById('fillDocInfo');
         const fillTemplate = document.getElementById('fillTemplate');
@@ -540,7 +820,7 @@
         const downloadLink = document.getElementById('downloadLink');
         const fillError = document.getElementById('fillError');
         fillDocs.addEventListener('change', () => updateFileInfoMulti(fillDocs, fillDocInfo, true));
-        extractFiles.addEventListener('change', () => updateFileInfoMulti(extractFiles, extractFileInfo, true));
+        fillTemplate.addEventListener('change', () => updateFileInfoMulti(fillTemplate, fillTemplateInfo, false));
         document.getElementById('fillDocArea').addEventListener('click', () => fillDocs.click());
         document.getElementById('fillTemplateArea').addEventListener('click', () => fillTemplate.click());
         fillSubmit.addEventListener('click', async () => {
@@ -555,7 +835,8 @@
             fillError.classList.add('hidden');
             fillResultDiv.classList.add('hidden');
             fillSubmit.disabled = true;
-            fillSubmit.textContent = '生成中...';
+            fillSubmit.classList.add('loading');
+            fillSubmit.textContent = '生成中';
             const formData = new FormData();
             for (let i = 0; i < docFiles.length; i++) formData.append('documents', docFiles[i]);
             formData.append('template', templateFile);
@@ -575,11 +856,12 @@
                 fillError.classList.remove('hidden');
             } finally {
                 fillSubmit.disabled = false;
-                fillSubmit.textContent = '生成并下载 Excel';
+                fillSubmit.classList.remove('loading');
+                fillSubmit.textContent = '生成并下载表格';
             }
         });
 
-        // ---------- 文档格式调整 ----------
+        // 格式调整模块
         const formatFile = document.getElementById('formatFile');
         const formatFileInfo = document.getElementById('formatFileInfo');
         const formatCommand = document.getElementById('formatCommand');
@@ -587,7 +869,7 @@
         const formatResultDiv = document.getElementById('formatResult');
         const formatDownloadLink = document.getElementById('formatDownloadLink');
         const formatError = document.getElementById('formatError');
-        formatFile.addEventListener('change', () => updateFileInfo(formatFile, formatFileInfo, false));
+        formatFile.addEventListener('change', () => updateFileInfoMulti(formatFile, formatFileInfo, false));
         document.getElementById('formatFileArea').addEventListener('click', () => formatFile.click());
         formatSubmit.addEventListener('click', async () => {
             const file = formatFile.files[0];
@@ -600,7 +882,8 @@
             formatError.classList.add('hidden');
             formatResultDiv.classList.add('hidden');
             formatSubmit.disabled = true;
-            formatSubmit.textContent = '处理中...';
+            formatSubmit.classList.add('loading');
+            formatSubmit.textContent = '处理中';
             const formData = new FormData();
             formData.append('document', file);
             formData.append('command', command);
@@ -619,191 +902,51 @@
                 formatError.classList.remove('hidden');
             } finally {
                 formatSubmit.disabled = false;
+                formatSubmit.classList.remove('loading');
                 formatSubmit.textContent = '应用格式并下载';
             }
         });
-        // ========== 拖拽上传功能（完整修复版） ==========
 
-        // 辅助函数：更新文件列表显示（修复多文件显示问题）
-        function updateFileInfoMulti(inputElement, infoElement, multiple = true) {
-            const files = inputElement.files;
-            if (files.length === 0) {
-                infoElement.textContent = multiple ? '点击或拖拽上传文件' : '点击上传文件';
-                return;
-            }
-            if (multiple && files.length > 1) {
-                infoElement.textContent = `${files.length} 个文件已选择`;
-            } else {
-                infoElement.textContent = files[0].name;
-            }
-        }
-
-        // 1. 表格智能填写区域 - 文档拖拽上传（支持多文件）
-        const fillDocArea = document.getElementById('fillDocArea');
-        const fillDocsInput = document.getElementById('fillDocs');
-        const fillDocInfoSpan = document.getElementById('fillDocInfo');
-
-        if (fillDocArea) {
-            // 阻止默认拖拽行为
-            fillDocArea.addEventListener('dragover', (e) => {
+        // 拖拽上传（保持与原设计一致）
+        function setupDrag(areaId, inputId, infoId, multiple = true) {
+            const area = document.getElementById(areaId);
+            const input = document.getElementById(inputId);
+            const infoSpan = document.getElementById(infoId);
+            if (!area) return;
+            area.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                e.stopPropagation();
-                fillDocArea.style.borderColor = 'rgb(var(--primary))';
-                fillDocArea.style.backgroundColor = 'rgba(var(--primary), 0.05)';
+                area.style.borderColor = 'var(--accent-solid)';
+                area.style.backgroundColor = 'var(--accent-soft)';
             });
-
-            fillDocArea.addEventListener('dragleave', (e) => {
+            area.addEventListener('dragleave', (e) => {
                 e.preventDefault();
-                e.stopPropagation();
-                fillDocArea.style.borderColor = 'rgb(var(--border))';
-                fillDocArea.style.backgroundColor = '';
+                area.style.borderColor = '';
+                area.style.backgroundColor = '';
             });
-
-            fillDocArea.addEventListener('drop', (e) => {
+            area.addEventListener('drop', (e) => {
                 e.preventDefault();
-                e.stopPropagation();
-                fillDocArea.style.borderColor = 'rgb(var(--border))';
-                fillDocArea.style.backgroundColor = '';
-                
+                area.style.borderColor = '';
+                area.style.backgroundColor = '';
                 const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    // 获取现有文件
-                    const existingFiles = Array.from(fillDocsInput.files);
-                    // 合并新文件
-                    const allFiles = [...existingFiles, ...Array.from(files)];
-                    
-                    // 创建新的 FileList
-                    const dataTransfer = new DataTransfer();
-                    for (let i = 0; i < allFiles.length; i++) {
-                        dataTransfer.items.add(allFiles[i]);
-                    }
-                    fillDocsInput.files = dataTransfer.files;
-                    
-                    // 更新显示
-                    updateFileInfoMulti(fillDocsInput, fillDocInfoSpan, true);
+                if (files.length === 0) return;
+                if (multiple) {
+                    const existing = Array.from(input.files);
+                    const all = [...existing, ...Array.from(files)];
+                    const dt = new DataTransfer();
+                    all.forEach(f => dt.items.add(f));
+                    input.files = dt.files;
+                } else {
+                    const dt = new DataTransfer();
+                    dt.items.add(files[0]);
+                    input.files = dt.files;
                 }
+                updateFileInfoMulti(input, infoSpan, multiple);
             });
         }
-
-        // 2. 表格智能填写区域 - 模板拖拽上传（单文件）
-        const fillTemplateArea = document.getElementById('fillTemplateArea');
-        const fillTemplateInput = document.getElementById('fillTemplate');
-        const fillTemplateInfoSpan = document.getElementById('fillTemplateInfo');
-
-        if (fillTemplateArea) {
-            fillTemplateArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                fillTemplateArea.style.borderColor = 'rgb(var(--primary))';
-                fillTemplateArea.style.backgroundColor = 'rgba(var(--primary), 0.05)';
-            });
-
-            fillTemplateArea.addEventListener('dragleave', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                fillTemplateArea.style.borderColor = 'rgb(var(--border))';
-                fillTemplateArea.style.backgroundColor = '';
-            });
-
-            fillTemplateArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                fillTemplateArea.style.borderColor = 'rgb(var(--border))';
-                fillTemplateArea.style.backgroundColor = '';
-                
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    const file = files[0];
-                    const dataTransfer = new DataTransfer();
-                    dataTransfer.items.add(file);
-                    fillTemplateInput.files = dataTransfer.files;
-                    fillTemplateInfoSpan.textContent = file.name;
-                }
-            });
-        }
-
-        // 3. 智能文档提取区域 - 拖拽上传（支持多文件）
-        const extractFileArea = document.getElementById('extractFileArea');
-        const extractFilesInput = document.getElementById('extractFiles');
-        const extractFileInfoSpan = document.getElementById('extractFileInfo');
-
-        if (extractFileArea) {
-            extractFileArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                extractFileArea.style.borderColor = 'rgb(var(--primary))';
-                extractFileArea.style.backgroundColor = 'rgba(var(--primary), 0.05)';
-            });
-
-            extractFileArea.addEventListener('dragleave', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                extractFileArea.style.borderColor = 'rgb(var(--border))';
-                extractFileArea.style.backgroundColor = '';
-            });
-
-            extractFileArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                extractFileArea.style.borderColor = 'rgb(var(--border))';
-                extractFileArea.style.backgroundColor = '';
-                
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    // 获取现有文件
-                    const existingFiles = Array.from(extractFilesInput.files);
-                    // 合并新文件
-                    const allFiles = [...existingFiles, ...Array.from(files)];
-                    
-                    const dataTransfer = new DataTransfer();
-                    for (let i = 0; i < allFiles.length; i++) {
-                        dataTransfer.items.add(allFiles[i]);
-                    }
-                    extractFilesInput.files = dataTransfer.files;
-                    
-                    updateFileInfoMulti(extractFilesInput, extractFileInfoSpan, true);
-                }
-            });
-        }
-
-        // 4. 文档格式调整区域 - 拖拽上传（单文件）
-        const formatFileArea = document.getElementById('formatFileArea');
-        const formatFileInput = document.getElementById('formatFile');
-        const formatFileInfoSpan = document.getElementById('formatFileInfo');
-
-        if (formatFileArea) {
-            formatFileArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                formatFileArea.style.borderColor = 'rgb(var(--primary))';
-                formatFileArea.style.backgroundColor = 'rgba(var(--primary), 0.05)';
-            });
-
-            formatFileArea.addEventListener('dragleave', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                formatFileArea.style.borderColor = 'rgb(var(--border))';
-                formatFileArea.style.backgroundColor = '';
-            });
-
-            formatFileArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                formatFileArea.style.borderColor = 'rgb(var(--border))';
-                formatFileArea.style.backgroundColor = '';
-                
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    const file = files[0];
-                    const dataTransfer = new DataTransfer();
-                    dataTransfer.items.add(file);
-                    formatFileInput.files = dataTransfer.files;
-                    formatFileInfoSpan.textContent = file.name;
-                }
-            });
-        }
-
-   
+        setupDrag('extractFileArea', 'extractFiles', 'extractFileInfo', true);
+        setupDrag('fillDocArea', 'fillDocs', 'fillDocInfo', true);
+        setupDrag('fillTemplateArea', 'fillTemplate', 'fillTemplateInfo', false);
+        setupDrag('formatFileArea', 'formatFile', 'formatFileInfo', false);
     </script>
 </body>
 </html>
