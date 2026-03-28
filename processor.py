@@ -2,6 +2,7 @@
 # 统一的调用脚本
 import os
 import logging
+import pandas as pd
 from document_reader import DocumentReader
 from excel_handler import fill_excel_with_data, parse_excel_template
 from ai_module import extract_entities_safe
@@ -17,7 +18,9 @@ class DocumentProcessor:
 
     def __init__(self):
         self.reader = DocumentReader()
-        self.operator = InstructionOperator()
+        # 从环境变量或直接传入 API Key
+        api_key = os.environ.get('DEEPSEEK_API_KEY', "sk-4cbb2ea6e387462383eaeefdbcaa3314")
+        self.operator = InstructionOperator(api_key=api_key)
         print("✅ 文档处理器初始化成功")
     
     # 处理单个文档
@@ -87,59 +90,36 @@ class DocumentProcessor:
     # 批量处理多个模板（使用所有文档）
        
     def process_batch(self, doc_paths, template_paths, output_dir):
-        """批量处理多个模板，合并所有文档数据"""
+        """批量处理多个模板"""
         results = []
-        total = len(template_paths)
         
         for i, template_path in enumerate(template_paths, 1):
-            print(f"\n{'='*50}")
-            print(f"处理第 {i}/{total} 个模板：{os.path.basename(template_path)}")
+            all_data = []
             
-            try:
-                # 解析模板字段
-                fields = parse_excel_template(template_path)
-                logger.info(f"📋 模板字段：{fields}")
-                
-                # 合并所有文档的数据
-                all_data = []
-                for doc_path in doc_paths:
-                    logger.info(f"📖 读取文档：{os.path.basename(doc_path)}")
+            for doc_path in doc_paths:
+                # 判断文件类型
+                if doc_path.endswith('.xlsx') or doc_path.endswith('.xls'):
+                    # Excel 文件：直接读取，不用 AI
+                    logger.info(f"📊 直接读取 Excel: {os.path.basename(doc_path)}")
+                    df = pd.read_excel(doc_path)
+                    data = df.to_dict('records')
+                    all_data.extend(data)
+                    logger.info(f"   读取到 {len(data)} 行数据")
+                else:
+                    # Word/TXT 文件：用 AI 提取
+                    logger.info(f"🤖 用 AI 处理文档: {os.path.basename(doc_path)}")
                     text = self.reader.read(doc_path)
-                    
-                    # 提取数据
+                    fields = parse_excel_template(template_path)
                     data = extract_entities_safe(text, fields)
-                    
-                    # 合并
                     if isinstance(data, list):
                         all_data.extend(data)
                     elif isinstance(data, dict):
                         all_data.append(data)
-                
-                logger.info(f"📊 合并后共 {len(all_data)} 行数据")
-                
-                # 生成输出文件
-                output_filename = f"result_{i}_{os.path.basename(template_path)}.xlsx"
-                output_path = os.path.join(output_dir, output_filename)
-                
-                # 填表
-                fill_excel_with_data(template_path, all_data, output_path)
-                logger.info(f"✅ Excel生成成功：{output_path}")
-                
-                results.append({
-                    'template': template_path,
-                    'template_name': os.path.basename(template_path),
-                    'output_path': output_path,
-                    'data_count': len(all_data),
-                    'success': True
-                })
-                
-            except Exception as e:
-                logger.error(f"处理失败：{e}")
-                results.append({
-                    'template': template_path,
-                    'success': False,
-                    'error': str(e)
-                })
+            
+            # 填表
+            output_path = os.path.join(output_dir, f"result_{i}.xlsx")
+            fill_excel_with_data(template_path, all_data, output_path)
+            results.append({'success': True, 'output': output_path})
         
         return results
     # 智能指令操作文档
@@ -151,19 +131,12 @@ class DocumentProcessor:
         command = parse_instruction(instruction)
         logger.info(f"🤖 AI理解结果：{command}")
         
-        if command.get('intent') == 'unknown':
+        if command.get('intent') != 'operate':
             return {'success': False, 'error': '无法理解您的指令'}
         
-        # 2. 构建标准化指令
-        std_command = {
-            'operation': command.get('action'),
-            'target': command.get('target', 'all'),
-            'parameters': command
-        }
-        logger.info(f"📋 标准化指令：{std_command}")
-        
-        # 3. 执行标准化指令
-        result = self.operator.execute_standard(std_command, file_path)
+        # 2. 直接调用 operator.execute，不构建 std_command
+        result = self.operator.execute(instruction, file_path)
         logger.info(f"🔧 执行结果：{result}")
         
         return result
+    

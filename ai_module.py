@@ -159,37 +159,67 @@ def extract_entities_safe(text: str, targets: list) -> list:
 
 
 # ==================== 指令解析函数 ====================
-
 def parse_instruction(instruction: str) -> dict:
     """
     解析用户指令，返回包含意图和操作参数的字典。
-    简化版，只用正则解析（更快，不需要调用大模型）
+    支持位置定位。
     """
     instruction_lower = instruction.lower()
+    
     result = {
         "intent": "unknown",
         "action": None,
         "target": None,
-        "location": {
-            "type": None,
-            "index": None,
-            "row": None,
-            "col": None,
-            "text": None
-        }
+        "position": None,
+        "row": None,
+        "col": None,
+        "size": None,
+        "width": None,
+        "rows": None,
+        "cols": None
     }
 
-    # 判断意图
-    if any(k in instruction_lower for k in ["填表", "填写表格", "生成表格"]):
+    # ========== 1. 提取位置信息 ==========
+    # 匹配 "第2段"
+    para_match = re.search(r"第(\d+)段", instruction)
+    if para_match:
+        result["position"] = int(para_match.group(1))
+        result["target"] = "paragraph"
+    
+    # 匹配 "第3行"
+    row_match = re.search(r"第(\d+)行", instruction)
+    if row_match:
+        result["row"] = int(row_match.group(1))
+        result["target"] = "row"
+    
+    # 匹配 "第2列"
+    col_match = re.search(r"第(\d+)列", instruction)
+    if col_match:
+        result["col"] = int(col_match.group(1))
+        result["target"] = "column"
+    
+    # 组合匹配 "第2行第3列"
+    if row_match and col_match:
+        result["target"] = "cell"
+
+    # ========== 2. 判断意图 ==========
+    # 先检查是否是操作类指令
+    is_operate = any(k in instruction_lower for k in [
+        "加粗", "斜体", "下划线", "居中", "左对齐", "右对齐",
+        "设置字体", "字体大小", "插入表格", "加粗表头", "求和", "列宽"
+    ])
+    
+    if is_operate:
+        result["intent"] = "operate"
+    elif any(k in instruction_lower for k in ["填表", "填写表格", "生成表格"]):
         result["intent"] = "fill_form"
     elif any(k in instruction_lower for k in ["搜索", "查找", "找到"]):
         result["intent"] = "search"
     elif any(k in instruction_lower for k in ["问", "是什么", "为什么"]):
         result["intent"] = "ask"
-    elif any(k in instruction_lower for k in ["加粗", "斜体", "下划线", "居中", "提取", "设置字体", "插入表格", "加粗表头", "求和", "列宽"]):
-        result["intent"] = "operate"
 
-    # 操作类型
+    # ========== 3. 识别操作类型 ==========
+    # Word 操作
     if "加粗" in instruction_lower:
         result["action"] = "bold"
     elif "斜体" in instruction_lower:
@@ -198,33 +228,121 @@ def parse_instruction(instruction: str) -> dict:
         result["action"] = "underline"
     elif "居中" in instruction_lower:
         result["action"] = "center"
-    elif "提取" in instruction_lower:
-        result["action"] = "extract"
-        match = re.search(r"提取(.*?)(?=[，。、]|$)", instruction)
-        if match:
-            result["target"] = match.group(1).strip()
-    elif "字体大小" in instruction_lower:
+    elif "左对齐" in instruction_lower:
+        result["action"] = "left"
+    elif "右对齐" in instruction_lower:
+        result["action"] = "right"
+    # 字体大小（支持多种说法）
+    elif "字体大小" in instruction_lower or "设置字体" in instruction_lower:
         result["action"] = "font_size"
-        match = re.search(r"(\d+)", instruction)
-        if match:
-            result["size"] = int(match.group(1))
+        size_match = re.search(r"(\d+)", instruction)
+        if size_match:
+            result["size"] = int(size_match.group(1))
+        else:
+            result["size"] = 12  # 默认
+    # 插入表格
     elif "插入表格" in instruction_lower:
         result["action"] = "insert_table"
         dims = re.findall(r"(\d+)", instruction)
         if len(dims) >= 2:
             result["rows"] = int(dims[0])
             result["cols"] = int(dims[1])
+        else:
+            result["rows"] = 3
+            result["cols"] = 3
+    # Excel 操作
     elif "加粗表头" in instruction_lower:
         result["action"] = "excel_bold"
+        result["target"] = "header"
     elif "求和" in instruction_lower:
         result["action"] = "excel_sum"
     elif "列宽" in instruction_lower:
         result["action"] = "excel_width"
-        match = re.search(r"(\d+)", instruction)
+        width_match = re.search(r"(\d+)", instruction)
+        if width_match:
+            result["width"] = int(width_match.group(1))
+    # 提取操作
+    elif "提取" in instruction_lower:
+        result["action"] = "extract"
+        match = re.search(r"提取(.*?)(?=[，。、]|$)", instruction)
         if match:
-            result["width"] = int(match.group(1))
+            result["target"] = match.group(1).strip()
+
+    # ========== 4. 如果没有提取到 target，设置默认值 ==========
+    if result["target"] is None and result["intent"] == "operate":
+        result["target"] = "all"
 
     return result
+
+#==================== 筛选条件解析函数 ====================
+def parse_filter_conditions(instruction: str) -> dict:
+    """
+    用 AI 解析用户指令中的筛选条件
+    返回结构化筛选条件
+    """
+    prompt = f"""
+    你是一个筛选条件解析助手。用户会输入指令，你需要从中提取筛选条件。
+
+    支持的筛选类型：
+    1. 日期范围：如 "2020/7/1到2020/8/31"、"2020-07-01至2020-08-31"
+    2. 数值比较：如 "金额大于1000"、"GDP超过5000亿"、"人口少于100万"
+    3. 文本匹配：如 "城市包含'上海'"、"项目名称等于'GDP'"
+
+    请以 JSON 格式返回筛选条件，格式如下：
+
+    示例1："提取2020/7/1到2020/8/31的数据"
+    返回：{{
+        "filters": [
+            {{
+                "type": "date_range",
+                "column": "日期",
+                "start": "2020-07-01",
+                "end": "2020-08-31"
+            }}
+        ]
+    }}
+
+    示例2："筛选金额大于1000的记录"
+    返回：{{
+        "filters": [
+            {{
+                "type": "numeric",
+                "column": "金额",
+                "operator": ">",
+                "value": 1000
+            }}
+        ]
+    }}
+
+    示例3："提取GDP超过5000亿且人口少于100万的城市"
+    返回：{{
+        "filters": [
+            {{"type": "numeric", "column": "GDP", "operator": ">", "value": 5000}},
+            {{"type": "numeric", "column": "人口", "operator": "<", "value": 100}}
+        ]
+    }}
+
+    用户指令：{instruction}
+
+    只返回 JSON 对象，不要有其他文字。
+    """
+    
+    try:
+        result_text = call_deepseek(prompt, max_tokens=500)
+        if not result_text:
+            return {"filters": []}
+        
+        # 提取 JSON
+        import re
+        json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+        return {"filters": []}
+    except Exception as e:
+        logger.error(f"解析筛选条件失败: {e}")
+        return {"filters": []}
+
+
 
 
 # ==================== 测试部分 ====================
@@ -252,6 +370,7 @@ if __name__ == "__main__":
         "帮我填一下这个表格",
         "提取所有日期",
         "把第三行加粗",
+        "设置第3段字体为16", 
         "今天天气怎么样"
     ]
     for inst in test_instructions:
