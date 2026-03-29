@@ -1,10 +1,27 @@
 import json
 import logging
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ==================== 计时器装饰器 ====================
+def timer(func):
+    """计时器装饰器，打印函数执行时间"""
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        logger.info(f"⏱️ {func.__name__} 耗时: {end - start:.2f} 秒")
+        return result
+    return wrapper
+
+def log_time(message):
+    """打印时间日志"""
+    logger.info(f"⏱️ {message}")
+# =====================================================
 
 # ==================== 模型配置（修改这里切换模型）====================
 # 可选模型：
@@ -12,12 +29,12 @@ logger = logging.getLogger(__name__)
 # - "glm-4-flash"       (智谱 AI，最快，推荐)
 # - "glm-4"             (智谱 AI 标准版)
 # - "qwen-turbo"        (通义千问，需要安装 dashscope)
-USE_MODEL = "glm-4-flash"  # ← 改这一行切换模型
+USE_MODEL = "deepseek-chat"  # ← 改这一行切换模型
 # ===================================================================
 
 # ==================== API 密钥配置 ====================
 DEEPSEEK_API_KEY = "sk-4cbb2ea6e387462383eaeefdbcaa3314"
-ZHIPU_API_KEY = "fb5f5b006b53493690d18d756963810a.f9mfzGzSWmNvJfys" 
+ZHIPU_API_KEY = "fb5f5b006b53493690d18d756963810a.f9mfzGzSWmNvJfys"  # 使用智谱 AI 时需要填写
 # =====================================================
 
 # 全局客户端
@@ -48,9 +65,12 @@ def init_client():
         # from dashscope import Generation
 
 
+@timer
 def call_model(prompt: str, max_tokens: int = 2000) -> str:
     """统一调用接口"""
     try:
+        start = time.time()
+        
         if USE_MODEL == "deepseek-chat":
             response = client.chat.completions.create(
                 model=USE_MODEL,
@@ -58,7 +78,9 @@ def call_model(prompt: str, max_tokens: int = 2000) -> str:
                 temperature=0.1,
                 max_tokens=max_tokens,
             )
-            return response.choices[0].message.content.strip()
+            result = response.choices[0].message.content.strip()
+            logger.info(f"   DeepSeek API 调用: {time.time() - start:.2f}s, 输出长度: {len(result)}")
+            return result
         
         elif USE_MODEL in ["glm-4-flash", "glm-4"]:
             response = zhipu_client.chat.completions.create(
@@ -67,7 +89,9 @@ def call_model(prompt: str, max_tokens: int = 2000) -> str:
                 temperature=0.1,
                 max_tokens=max_tokens,
             )
-            return response.choices[0].message.content.strip()
+            result = response.choices[0].message.content.strip()
+            logger.info(f"   智谱 AI API 调用: {time.time() - start:.2f}s, 输出长度: {len(result)}")
+            return result
         
         elif USE_MODEL == "qwen-turbo":
             from dashscope import Generation
@@ -78,7 +102,9 @@ def call_model(prompt: str, max_tokens: int = 2000) -> str:
                 temperature=0.1,
                 max_tokens=max_tokens,
             )
-            return response.output.choices[0].message.content.strip()
+            result = response.output.choices[0].message.content.strip()
+            logger.info(f"   通义千问 API 调用: {time.time() - start:.2f}s, 输出长度: {len(result)}")
+            return result
         
         else:
             raise ValueError(f"不支持的模型: {USE_MODEL}")
@@ -90,6 +116,7 @@ def call_model(prompt: str, max_tokens: int = 2000) -> str:
 
 # ==================== 信息提取函数 ====================
 
+@timer
 def extract_entities(text: str, targets: list) -> list:
     """
     从文本中提取指定的字段值，返回列表
@@ -113,13 +140,12 @@ def extract_entities(text: str, targets: list) -> list:
 返回 JSON 数组，每个元素是一个对象。
 如果字段不存在填 null。
 
-文本：{text}
+文本：{text[:3000]}
 
 只返回 JSON 数组。
 """
     
     try:
-        logger.info(f"调用模型提取字段...")
         result_text = call_model(prompt, max_tokens=2000)
         
         if not result_text:
@@ -146,6 +172,7 @@ def extract_entities(text: str, targets: list) -> list:
         return []
 
 
+@timer
 def extract_entities_safe(text: str, targets: list) -> list:
     """安全提取：分段处理大文件"""
     CHUNK_SIZE = 3000
@@ -186,6 +213,7 @@ def extract_entities_safe(text: str, targets: list) -> list:
     return all_results
 
 
+@timer
 def extract_entities_safe_parallel(text: str, targets: list, max_workers=4) -> list:
     """并行分段处理大文件"""
     CHUNK_SIZE = 3000
@@ -238,6 +266,8 @@ def extract_entities_safe_parallel(text: str, targets: list, max_workers=4) -> l
 
 def parse_instruction(instruction: str) -> dict:
     """解析用户指令，返回包含意图和操作参数的字典"""
+    start = time.time()
+    
     instruction_lower = instruction.lower()
     
     result = {
@@ -334,7 +364,8 @@ def parse_instruction(instruction: str) -> dict:
 
     if result["target"] is None and result["intent"] == "operate":
         result["target"] = "all"
-
+    
+    logger.info(f"⏱️ parse_instruction 耗时: {time.time() - start:.3f} 秒")
     return result
 
 
