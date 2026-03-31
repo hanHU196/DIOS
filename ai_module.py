@@ -35,6 +35,7 @@ USE_MODEL = "deepseek-chat"  # ← 改这一行切换模型
 # ==================== API 密钥配置 ====================
 DEEPSEEK_API_KEY = "sk-4cbb2ea6e387462383eaeefdbcaa3314"
 ZHIPU_API_KEY = "fb5f5b006b53493690d18d756963810a.f9mfzGzSWmNvJfys"  # 使用智谱 AI 时需要填写
+QWEN_API_KEY = "sk-63c82a8d5e9f4281bf19d1405cb7cc58"
 # =====================================================
 
 # 全局客户端
@@ -60,10 +61,9 @@ def init_client():
         logger.info(f"✅ 使用智谱 AI 模型: {USE_MODEL}")
     
     elif USE_MODEL == "qwen-turbo":
-        logger.info("✅ 使用通义千问模型（需要安装 dashscope）")
-        # 如需使用，请安装: pip install dashscope
-        # from dashscope import Generation
-
+        import dashscope
+        dashscope.api_key = QWEN_API_KEY
+        logger.info(f"✅ 使用通义千问模型: {USE_MODEL}")
 
 @timer
 def call_model(prompt: str, max_tokens: int = 2000) -> str:
