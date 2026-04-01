@@ -363,6 +363,19 @@ def api_fill():
         if not is_word_template and not is_excel_template:
             return jsonify({'error': '模板格式不支持'}), 400
         
+        # ========== 特殊场景：单个 Excel 数据文件 + Word 模板 ==========
+        is_excel_to_word = (len(doc_paths) == 1 and
+                            doc_paths[0].endswith(('.xlsx', '.xls')) and
+                            is_word_template)   # 注意这里直接用 is_word_template
+        
+        if is_excel_to_word:
+            output_filename = f"{os.path.splitext(os.path.basename(doc_paths[0]))[0]}_填表.docx"
+            output_path = os.path.join('outputs', output_filename)
+            os.makedirs('outputs', exist_ok=True)
+            fill_word_from_excel(template_path, doc_paths[0], output_path)
+            return send_file(output_path, as_attachment=True, download_name=output_filename)
+        
+        
         # 解析模板字段
         if is_excel_template:
             from excel_handler import parse_excel_template
@@ -627,6 +640,96 @@ def api_format():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+def fill_word_from_excel(template_path, excel_path, output_path):
+    """动态版：根据 Word 表格前的段落文本提取城市名，根据表头自动匹配 Excel 列名"""
+    from docx import Document
+    import pandas as pd
+    import re
+
+    # 1. 读取 Excel 数据
+    df = pd.read_excel(excel_path)
+
+    # 2. 打开 Word 模板
+    doc = Document(template_path)
+    tables = doc.tables
+
+    # 3. 识别每个表格对应的城市（从段落文本中提取城市名）
+    city_table_map = {}
+    table_index = 0
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if text:
+            # 尝试从段落中提取城市名（匹配“德州市”、“潍坊市”、“临沂市”等）
+            # 可根据实际城市列表调整正则
+            match = re.search(r'(德州市|潍坊市|临沂市)', text)
+            if match:
+                city_name = match.group(1)
+                # 检查后面是否有表格
+                next_elem = para._element.getnext()
+                while next_elem is not None:
+                    if next_elem.tag.endswith('tbl'):
+                        if table_index < len(tables):
+                            city_table_map[city_name] = tables[table_index]
+                            table_index += 1
+                        break
+                    next_elem = next_elem.getnext()
+        if table_index >= len(tables):
+            break
+
+    # 降级方案：如果未识别到，使用顺序匹配（城市列表可根据 Excel 中的实际城市动态获取）
+    if not city_table_map:
+        # 从 Excel 中获取所有不重复的城市名（按顺序）
+        cities = df['城市'].dropna().unique().tolist()
+        for i, city in enumerate(cities):
+            if i < len(tables):
+                city_table_map[city] = tables[i]
+
+    # 4. 获取 Excel 列名
+    excel_columns = df.columns.tolist()
+
+    # 5. 填充每个表格
+    for city, table in city_table_map.items():
+        city_data = df[df['城市'] == city]
+
+        # 获取 Word 表格表头（第一行）
+        header_row = table.rows[0]
+        header_texts = [cell.text.strip() for cell in header_row.cells]
+
+        # 建立列映射
+        col_mapping = {}
+        for i, header in enumerate(header_texts):
+            if header in excel_columns:
+                col_mapping[i] = header
+            else:
+                # 模糊匹配（去除空格、括号）
+                clean_header = header.replace(' ', '').replace('（', '').replace('）', '')
+                for col in excel_columns:
+                    if clean_header in col.replace(' ', '').replace('（', '').replace('）', ''):
+                        col_mapping[i] = col
+                        break
+                if i not in col_mapping:
+                    col_mapping[i] = None
+
+        # 调整行数
+        existing_rows = len(table.rows) - 1
+        needed_rows = len(city_data) - existing_rows
+        if needed_rows > 0:
+            for _ in range(needed_rows):
+                table.add_row()
+
+        # 填充数据
+        for row_idx, (_, row_data) in enumerate(city_data.iterrows()):
+            target_row = table.rows[row_idx + 1]
+            for col_idx, excel_col in col_mapping.items():
+                if col_idx < len(target_row.cells):
+                    value = row_data.get(excel_col, '') if excel_col else ''
+                    target_row.cells[col_idx].text = str(value)
+
+    doc.save(output_path)
+    logger.info(f"✅ Word 文件已生成（动态版本）：{output_path}")
+    return output_path
 
 if __name__ == '__main__':
     app.run(debug=True)
