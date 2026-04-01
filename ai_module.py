@@ -179,56 +179,46 @@ def call_model(prompt: str, max_tokens: int = 2000) -> str:
 @timer
 def extract_entities(text: str, targets: list) -> list:
     """
-    从文本中提取指定的字段值，返回列表
+    通用提取：根据模板字段自动匹配文档内容
     """
-    CHUNK_SIZE = 6000
-    
-    if len(text) > CHUNK_SIZE:
-        return extract_entities_safe(text, targets)
-    
-    logger.info(f"提取文本长度: {len(text)}")
-    
-    if not isinstance(targets, list) or len(targets) == 0:
-        logger.error("targets 必须为非空列表")
+    if not targets:
         return []
     
-    target_str = "、".join(targets)
+    # 构建通用 Prompt
+    fields_str = "、".join(targets)
     
-    # 简化提示词（提速）
-    prompt = f"""
-提取字段：{target_str}
-返回 JSON 数组，每个元素是一个对象。
-如果字段不存在填 null。
+    prompt = f"""你是一个专业的信息提取助手。
 
-文本：{text[:3000]}
+任务：从以下文本中提取这些字段的值：{fields_str}。
 
-只返回 JSON 数组。
-"""
+要求：
+1. **语义理解**：字段名可能与文档中的说法不同，你需要理解它们的含义并匹配。
+2. **多条目处理**：如果文本中包含多个独立实体，提取所有条目。
+3. **数值提取**：只提取数字，去掉单位。
+4. **缺失处理**：如果字段不存在，填 null。
+5. **输出格式**：返回 JSON 数组。
+
+文本：
+{text[:4000]}
+
+只返回 JSON 数组。"""
     
     try:
         result_text = call_model(prompt, max_tokens=2000)
-        
-        if not result_text:
-            return []
         
         # 解析 JSON
         match = re.search(r'(\[.*\])', result_text, re.DOTALL)
         if match:
             result = json.loads(match.group())
-        else:
-            logger.warning(f"无法解析 JSON: {result_text[:200]}")
-            return []
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict):
+                return [result]
         
-        if isinstance(result, list):
-            logger.info(f"成功提取 {len(result)} 条数据")
-            return result
-        elif isinstance(result, dict):
-            return [result]
-        else:
-            return []
-            
+        return []
+        
     except Exception as e:
-        logger.error(f"出错: {e}")
+        logger.error(f"提取失败: {e}")
         return []
 
 
