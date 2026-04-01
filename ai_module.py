@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import time
+import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logging.basicConfig(level=logging.INFO)
@@ -23,31 +24,62 @@ def log_time(message):
     logger.info(f"⏱️ {message}")
 # =====================================================
 
-# ==================== 模型配置（修改这里切换模型）====================
+# ==================== 模型配置 ====================
 # 可选模型：
-# - "deepseek-chat"     (DeepSeek 默认，稳定)
-# - "glm-4-flash"       (智谱 AI，最快，推荐)
+# - "ollama"            (本地 Ollama，推荐)
+# - "deepseek-chat"     (DeepSeek API)
+# - "glm-4-flash"       (智谱 AI)
 # - "glm-4"             (智谱 AI 标准版)
-# - "qwen-turbo"        (通义千问，需要安装 dashscope)
-USE_MODEL = "deepseek-chat"  # ← 改这一行切换模型
-# ===================================================================
+# - "qwen-turbo"        (通义千问 API)
+USE_MODEL = "qwen-turbo"  # ← 改成 ollama 使用本地模型
+
+# Ollama 配置
+OLLAMA_MODEL = "phi3.5:3.8b" # 可选: qwen2.5:0.5b, qwen2.5:1.5b, qwen2.5:3b, qwen2.5:7b,phi3.5:3.8b
+OLLAMA_URL = "http://localhost:11434"
+# =====================================================
 
 # ==================== API 密钥配置 ====================
 DEEPSEEK_API_KEY = "sk-4cbb2ea6e387462383eaeefdbcaa3314"
-ZHIPU_API_KEY = "fb5f5b006b53493690d18d756963810a.f9mfzGzSWmNvJfys"  # 使用智谱 AI 时需要填写
+ZHIPU_API_KEY = "fb5f5b006b53493690d18d756963810a.f9mfzGzSWmNvJfys"
 QWEN_API_KEY = "sk-63c82a8d5e9f4281bf19d1405cb7cc58"
 # =====================================================
 
 # 全局客户端
 client = None
 zhipu_client = None
+ollama_available = False
 
 
 def init_client():
     """初始化客户端"""
-    global client, zhipu_client
+    global client, zhipu_client, ollama_available
     
-    if USE_MODEL == "deepseek-chat":
+    if USE_MODEL == "ollama":
+        # 检查 Ollama 服务
+        try:
+            response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+            if response.status_code == 200:
+                models = response.json().get("models", [])
+                model_names = [m["name"] for m in models]
+                logger.info(f"✅ Ollama 服务已连接")
+                logger.info(f"📦 可用模型: {model_names}")
+                
+                # 检查模型是否存在
+                model_base = OLLAMA_MODEL.split(":")[0]
+                if not any(model_base in m for m in model_names):
+                    logger.warning(f"⚠️ 模型 {OLLAMA_MODEL} 未找到")
+                    logger.info(f"   请运行: ollama pull {OLLAMA_MODEL}")
+                else:
+                    ollama_available = True
+                    logger.info(f"✅ 使用本地 Ollama 模型: {OLLAMA_MODEL}")
+            else:
+                logger.error("❌ Ollama 服务异常")
+        except Exception as e:
+            logger.error(f"❌ Ollama 服务未启动，请运行: ollama serve")
+            logger.error(f"   错误: {e}")
+            logger.info("将回退到 API 模式")
+    
+    elif USE_MODEL == "deepseek-chat":
         from openai import OpenAI
         client = OpenAI(
             api_key=DEEPSEEK_API_KEY,
@@ -65,13 +97,41 @@ def init_client():
         dashscope.api_key = QWEN_API_KEY
         logger.info(f"✅ 使用通义千问模型: {USE_MODEL}")
 
+
+def call_ollama(prompt: str, max_tokens: int = 2000, temperature: float = 0.1) -> str:
+    """调用本地 Ollama 模型"""
+    response = requests.post(
+        f"{OLLAMA_URL}/api/generate",
+        json={
+            "model": OLLAMA_MODEL,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens
+            }
+        },
+        timeout=120
+    )
+    
+    if response.status_code == 200:
+        return response.json()["response"]
+    else:
+        raise Exception(f"Ollama 调用失败: {response.text}")
+
+
 @timer
 def call_model(prompt: str, max_tokens: int = 2000) -> str:
     """统一调用接口"""
     try:
         start = time.time()
         
-        if USE_MODEL == "deepseek-chat":
+        if USE_MODEL == "ollama" and ollama_available:
+            result = call_ollama(prompt, max_tokens)
+            logger.info(f"   Ollama 本地调用: {time.time() - start:.2f}s, 输出长度: {len(result)}")
+            return result
+        
+        elif USE_MODEL == "deepseek-chat":
             response = client.chat.completions.create(
                 model=USE_MODEL,
                 messages=[{"role": "user", "content": prompt}],
@@ -121,7 +181,7 @@ def extract_entities(text: str, targets: list) -> list:
     """
     从文本中提取指定的字段值，返回列表
     """
-    CHUNK_SIZE = 3000
+    CHUNK_SIZE = 6000
     
     if len(text) > CHUNK_SIZE:
         return extract_entities_safe(text, targets)
@@ -404,13 +464,27 @@ init_client()
 # ==================== 测试部分 ====================
 if __name__ == "__main__":
     print(f"当前使用模型: {USE_MODEL}")
+    
+    if USE_MODEL == "ollama":
+        print(f"Ollama 模型: {OLLAMA_MODEL}")
+        print(f"Ollama 地址: {OLLAMA_URL}")
+    
     print("正在测试模型连接...")
-    test_response = call_model("你好，请回复'OK'", max_tokens=10)
-    if test_response:
-        print(f"✅ 模型连接成功！回复: {test_response}")
+    
+    if USE_MODEL == "ollama" and ollama_available:
+        test_response = call_ollama("你好，请回复'OK'", max_tokens=10)
+        if test_response:
+            print(f"✅ 模型连接成功！回复: {test_response}")
+        else:
+            print("❌ 模型连接失败！")
+            exit(1)
     else:
-        print("❌ 模型连接失败！")
-        exit(1)
+        test_response = call_model("你好，请回复'OK'", max_tokens=10)
+        if test_response:
+            print(f"✅ 模型连接成功！回复: {test_response}")
+        else:
+            print("❌ 模型连接失败！")
+            exit(1)
     
     print("\n" + "="*50)
     
