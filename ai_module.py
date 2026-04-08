@@ -135,7 +135,7 @@ def call_model(prompt: str, max_tokens: int = 2000) -> str:
             response = client.chat.completions.create(
                 model=USE_MODEL,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
+                temperature=0.001,
                 max_tokens=max_tokens,
             )
             result = response.choices[0].message.content.strip()
@@ -146,7 +146,7 @@ def call_model(prompt: str, max_tokens: int = 2000) -> str:
             response = zhipu_client.chat.completions.create(
                 model=USE_MODEL,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
+                temperature=0.001,
                 max_tokens=max_tokens,
             )
             result = response.choices[0].message.content.strip()
@@ -159,7 +159,7 @@ def call_model(prompt: str, max_tokens: int = 2000) -> str:
                 model=USE_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 result_format='message',
-                temperature=0.1,
+                temperature=0.001,
                 max_tokens=max_tokens,
             )
             result = response.output.choices[0].message.content.strip()
@@ -183,8 +183,14 @@ def extract_entities(text: str, targets: list) -> list:
     """
     if not targets:
         return []
+        
+    has_target = any(t in text for t in targets)
+    has_table_marker = "|" in text or "：" in text or ":" in text
+    has_digit = any(c.isdigit() for c in text)
     
-    # 构建通用 Prompt
+    if not (has_target or has_table_marker or has_digit):
+        return []
+    
     fields_str = "、".join(targets)
     
     prompt = f"""你是一个专业的信息提取助手。
@@ -192,40 +198,71 @@ def extract_entities(text: str, targets: list) -> list:
 任务：从以下文本中提取这些字段的值：{fields_str}。
 
 要求：
-1. **语义理解**：字段名可能与文档中的说法不同，你需要理解它们的含义并匹配。
-2. **多条目处理**：如果文本中包含多个独立实体，提取所有条目。
-3. **数值提取**：只提取数字，去掉单位。
-4. **缺失处理**：如果字段不存在，填 null。
-5. **输出格式**：返回 JSON 数组。
+1. **地域层级强制降维（最重要）**：如果字段名是“国家/地区”或类似宏观概念，但文本当前段落具体描述的是“省份”、“州”或“城市”（例如“湖北省”、“广东省”、“纽约州”），请【务必提取具体的省/市/州名称填入该字段】，绝对不要全局统一填国家名（如“中国”或“美国”）！同时，提取的语言必须与字段表头语言一致。
+2. **数值与单位绝对标准化（最重要）**：
+   - 观察字段名是否有单位（如“GDP（亿元）”），如果有，必须将原文数值换算为该单位后的【纯数字】。
+   - 例如：原文为“56708.71亿元”，字段为“GDP总量（亿元）”，请输出 56708.71；
+   - 若字段名【无单位】（如“人均GDP”、“人口”），请一律换算为【最基础单位】（金额换为“元”，人口换为“人”）。
+   - 无论哪种情况，最终【只允许输出纯数字】！例如：原文“7.3万元”，必须输出 73000；原文“5775万人”，必须输出 57750000；“无”输出 0。绝对不准在 JSON 中返回带有“万”、“亿”、“元”等汉字的字符串，必须转为对应位数的纯数字！
+3. **极速输出**：返回 JSON 数组，必须是单行无格式字符串！如果该段文本【完全没有】我们要的数据，请直接输出严格的 []，不要写任何多余的话！
+4. **严格锁死键名**：键名必须与任务字段一字不差！
+5.**语言绝对自适应（最重要）**：提取结果的语言【必须严格跟随字段表头的语言】！如果字段名是中文（如“大洲”、“国家”），请输出中文（如“亚洲”、“中国”）；如果字段名是英文（如“Continent”、“Country”），请输出英文（如“Asia”、“China”）。
 
 文本：
 {text[:4000]}
 
 只返回 JSON 数组。"""
-    
-    try:
-        result_text = call_model(prompt, max_tokens=2000)
-        
-        # 解析 JSON
-        match = re.search(r'(\[.*\])', result_text, re.DOTALL)
-        if match:
-            result = json.loads(match.group())
-            if isinstance(result, list):
-                return result
-            elif isinstance(result, dict):
-                return [result]
-        
-        return []
-        
-    except Exception as e:
-        logger.error(f"提取失败: {e}")
-        return []
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            result_text = call_model(prompt, max_tokens=8000)
+            clean_text = result_text.replace('```json', '').replace('```', '').strip()
+            
+            # ================= 🚀 提速核心：空数据极速放行 =================
+            # 如果 AI 明确表示没有数据（输出 []），直接返回，绝对不浪费 6 秒钟去重试！
+            if clean_text == '[]' or clean_text == '':
+                return []
+            # ==============================================================
+            
+            match_list = re.search(r'\[.*\]', clean_text, re.DOTALL)
+            if match_list:
+                result = json.loads(match_list.group())
+                return result if isinstance(result, list) else [result]
+                
+            match_dict = re.search(r'\{.*\}', clean_text, re.DOTALL)
+            if match_dict:
+                return [json.loads(match_dict.group())]
+                
+            salvaged_data = []
+            dict_matches = re.findall(r'\{.*?\}', clean_text, re.DOTALL)
+            for d_str in dict_matches:
+                try:
+                    item = json.loads(d_str)
+                    if isinstance(item, dict):
+                        salvaged_data.append(item)
+                except Exception:
+                    continue
+                    
+            if salvaged_data:
+                logger.warning(f"⚠️ 触发抢救模式，成功挽回 {len(salvaged_data)} 条记录！")
+                return salvaged_data
+                
+            raise ValueError("未能解析出任何有效的 JSON 对象")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ 第 {attempt + 1} 次提取失败: {str(e)[:50]}... 准备重试")
+            if attempt == max_retries - 1:
+                return []
+            import time
+            time.sleep(2)  # 仅在真正报错时才停顿重试
+    return []
 
 
 @timer
 def extract_entities_safe(text: str, targets: list) -> list:
     """安全提取：分段处理大文件"""
-    CHUNK_SIZE = 3000
+    CHUNK_SIZE = 2500
     
     if len(text) <= CHUNK_SIZE:
         return extract_entities(text, targets)
@@ -234,7 +271,8 @@ def extract_entities_safe(text: str, targets: list) -> list:
     
     # 分段
     chunks = []
-    for i in range(0, len(text), CHUNK_SIZE):
+    i = 0
+    while i < len(text):
         chunk = text[i:i + CHUNK_SIZE]
         if i + CHUNK_SIZE < len(text):
             boundary = max(
@@ -246,7 +284,11 @@ def extract_entities_safe(text: str, targets: list) -> list:
             )
             if boundary > CHUNK_SIZE // 2:
                 chunk = chunk[:boundary + 1]
+                chunks.append(chunk)
+                i += (boundary + 1)  # 关键：根据实际截断位置前进
+                continue
         chunks.append(chunk)
+        i += CHUNK_SIZE
     
     logger.info(f"共分为 {len(chunks)} 段")
     
@@ -265,53 +307,66 @@ def extract_entities_safe(text: str, targets: list) -> list:
 
 @timer
 def extract_entities_safe_parallel(text: str, targets: list, max_workers=4) -> list:
-    """并行分段处理大文件"""
-    CHUNK_SIZE = 3000
+    """并行分段处理大文件（已修复多线程抢占与乱序问题）"""
+    # ================= 修复：将大块改回小块，防止大模型超限截断 =================
+    CHUNK_SIZE = 2500
+    # =======================================================================
     
     if len(text) <= CHUNK_SIZE:
         return extract_entities(text, targets)
     
     logger.info(f"文本过长 ({len(text)} 字符)，将分段并行处理 (workers={max_workers})")
     
-    # 分段
+    # 1. 分段逻辑
     chunks = []
-    for i in range(0, len(text), CHUNK_SIZE):
+    i = 0
+    while i < len(text):
         chunk = text[i:i + CHUNK_SIZE]
         if i + CHUNK_SIZE < len(text):
-            boundary = max(
-                chunk.rfind('。'),
-                chunk.rfind('\n'),
-                chunk.rfind('，'),
-                chunk.rfind('、'),
-                chunk.rfind(' ')
-            )
-            if boundary > CHUNK_SIZE // 2:
+            boundary = -1
+            # 优先级：优先从换行符(表格行尾)切断，其次是句号，最后才是逗号和空格
+            for sep in ['\n', '。', '；', '，', '、', ' ']:
+                pos = chunk.rfind(sep)
+                if pos > CHUNK_SIZE // 2:
+                    boundary = pos
+                    break  # 只要找到了高级别的安全边界，立刻停止，绝不使用低级别的空格
+            
+            if boundary != -1:
                 chunk = chunk[:boundary + 1]
+                chunks.append(chunk)
+                i += (boundary + 1)
+                continue
         chunks.append(chunk)
+        i += CHUNK_SIZE
     
     logger.info(f"共分为 {len(chunks)} 段")
     
-    all_results = []
+    # 2. 提前占位
+    ordered_results = [[] for _ in range(len(chunks))]
+    
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(extract_entities, chunk, targets): idx 
                    for idx, chunk in enumerate(chunks)}
         
         for future in as_completed(futures):
-            idx = futures[future]
+            idx = futures[future]  
             try:
                 result = future.result()
                 if isinstance(result, list):
-                    all_results.extend(result)
+                    ordered_results[idx] = result
                 elif isinstance(result, dict):
-                    all_results.append(result)
+                    ordered_results[idx] = [result]
                 logger.info(f"  ✅ 第 {idx+1}/{len(chunks)} 段完成")
             except Exception as e:
                 logger.error(f"  ❌ 第 {idx+1} 段处理失败: {e}")
     
+    # 3. 按顺序拼接
+    all_results = []
+    for res in ordered_results:
+        all_results.extend(res)
+        
     logger.info(f"并行提取完成，共获取 {len(all_results)} 条数据")
     return all_results
-
-
 # ==================== 指令解析函数 ====================
 
 def parse_instruction(instruction: str) -> dict:

@@ -181,10 +181,7 @@ class DocumentReader:
             result.append(f"\n【段落内容】（共{len(paragraphs)}段）")
             result.append("-"*40)
             for i, para in enumerate(paragraphs, 1):
-                if len(para) > 200:
-                    result.append(f"{i}. {para[:200]}...（共{len(para)}字符）")
-                else:
-                    result.append(f"{i}. {para}")
+                result.append(f"{i}. {para}")
             
             # 读取所有表格
             if doc.tables:
@@ -192,10 +189,25 @@ class DocumentReader:
                 for table_idx, table in enumerate(doc.tables, 1):
                     result.append(f"\n表格 {table_idx}:")
                     result.append("-"*20)
-                    for row in table.rows:
-                        row_cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
-                        if row_cells:
-                            result.append(" | ".join(row_cells))
+                    headers = []
+                    for row_idx, row in enumerate(table.rows):
+                        row_cells = [cell.text.strip() for cell in row.cells]
+                        
+                        # 忽略全空的行
+                        if not any(row_cells):
+                            continue
+                        
+                        # 提取第一行作为表头
+                        if not headers:
+                            headers = row_cells
+                            result.append(" | ".join(headers))
+                        else:
+                            # 如果列数对齐，自动把表头和数据拼成 "键:值" 格式 (如：排名:51，城市:潍坊，GDP:7300)
+                            if len(headers) == len(row_cells):
+                                row_str = "，".join([f"{k}:{v}" for k, v in zip(headers, row_cells) if v])
+                                result.append(row_str)
+                            else:
+                                result.append(" | ".join(row_cells))
             
             # 检测图片数量（不识别内容）
             result.append("\n【图片内容】")
