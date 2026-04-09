@@ -27,21 +27,21 @@ class DocumentReader:
         """
         # 创建一个字典：文件后缀 -> 对应的读取函数
         self.supported_formats = {
-            '.txt': self._read_txt,      # txt文件用_read_txt函数读
-            '.md': self._read_md,        # md文件用_read_md函数读
-            '.xlsx': self._read_excel,    # Excel文件用_read_excel读
-            '.xls': self._read_excel,     # 老版Excel也一样
-            '.docx': self._read_docx,     # Word文件用_read_docx读
-            '.pdf': self._read_pdf,       # PDF文件用_read_pdf读
-            '.csv': self._read_csv        # CSV文件用_read_csv读
+            '.txt': self._read_txt,
+            '.md': self._read_md,
+            '.xlsx': self._read_excel,
+            '.xls': self._read_excel,
+            '.docx': self._read_docx,
+            '.pdf': self._read_pdf,
+            '.csv': self._read_csv
         }
         
-        # 打印初始化成功信息
         print("✅ 文档读取器初始化成功！支持格式：", list(self.supported_formats.keys()))
     
     def read_document(self, file_path):
         """兼容旧代码的别名方法"""
         return self.read(file_path)
+    
     # 统一入口函数
     def read(self, file_path):
         """
@@ -50,17 +50,14 @@ class DocumentReader:
         返回：文件内容（字符串）
         异常：如果文件不存在或读取失败，抛出异常
         """
-        # 1. 检查文件是否存在
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
         
-        # 2. 获取文件后缀
         ext = os.path.splitext(file_path)[1].lower()
         file_name = os.path.basename(file_path)
         
         print(f"📖 正在读取：{file_name}")
         
-        # 3. 根据后缀选择读取方法
         if ext in self.supported_formats:
             try:
                 content = self.supported_formats[ext](file_path)
@@ -71,9 +68,8 @@ class DocumentReader:
         else:
             raise ValueError(f"不支持的文件格式：{ext}，支持格式：{list(self.supported_formats.keys())}")
     
-    # 各种格式的具体读取函数
     def _read_txt(self, file_path):
-        """读取TXT文件 - 完整内容"""
+        """读取TXT文件"""
         encodings = ['utf-8', 'gbk', 'gb2312', 'utf-16', 'ansi']
         
         for encoding in encodings:
@@ -87,16 +83,14 @@ class DocumentReader:
             except Exception:
                 continue
         
-        # 如果所有编码都失败，用二进制模式读取
         with open(file_path, 'rb') as f:
             content = f.read().decode('utf-8', errors='ignore')
         print("  使用二进制模式")
         return f"【TXT文件】{os.path.basename(file_path)}\n{'='*60}\n{content}"
     
     def _read_md(self, file_path):
-        """读取Markdown文件 - 完整内容"""
+        """读取Markdown文件"""
         content = self._read_txt(file_path)
-        
         try:
             html = markdown.markdown(content)
             return f"【Markdown文档】{os.path.basename(file_path)}\n{'='*60}\n【原始内容】\n{content}\n\n{'='*60}\n【HTML转换】\n{html}"
@@ -104,8 +98,10 @@ class DocumentReader:
             return f"【Markdown文档】{os.path.basename(file_path)}\n{'='*60}\n{content}"
     
     def _read_excel(self, file_path):
-        """读取Excel文件 - 完整内容"""
+        """读取Excel文件 - 注意：会关闭文件句柄"""
+        excel_file = None
         try:
+            # 使用 data_only=True 读取值而不是公式
             excel_file = pd.ExcelFile(file_path)
             sheet_names = excel_file.sheet_names
             
@@ -115,16 +111,15 @@ class DocumentReader:
             all_content.append("="*60)
             
             for sheet_idx, sheet_name in enumerate(sheet_names):
-                df = pd.read_excel(file_path, sheet_name=sheet_name)
+                # 读取每个工作表
+                df = pd.read_excel(file_path, sheet_name=sheet_name, engine='openpyxl')
                 rows, cols = df.shape
                 
                 all_content.append(f"\n📊 工作表 {sheet_idx+1}: {sheet_name}")
                 all_content.append(f"行数: {rows}, 列数: {cols}")
                 all_content.append("-"*40)
                 
-                # 设置pandas显示选项以确保完整输出
                 with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None, 'display.max_colwidth', None):
-                    # 将DataFrame转换为字符串
                     df_string = df.to_string(index=True, header=True)
                     all_content.append(df_string)
                 
@@ -134,9 +129,19 @@ class DocumentReader:
             
         except Exception as e:
             return f"❌ Excel读取失败：{str(e)}"
+        finally:
+            # 确保关闭 Excel 文件句柄
+            if excel_file is not None:
+                try:
+                    excel_file.close()
+                except:
+                    pass
+            # 强制垃圾回收
+            import gc
+            gc.collect()
     
     def _read_csv(self, file_path):
-        """读取CSV文件 - 完整内容"""
+        """读取CSV文件"""
         try:
             df = pd.read_csv(file_path)
             rows, cols = df.shape
@@ -150,7 +155,6 @@ class DocumentReader:
             result.append("-"*40)
             result.append("【完整数据】")
             
-            # 设置pandas显示选项以确保完整输出
             with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None, 'display.max_colwidth', None):
                 result.append(df.to_string(index=True, header=True))
             
@@ -160,10 +164,10 @@ class DocumentReader:
             return f"❌ CSV读取失败：{str(e)}"
     
     def _read_docx(self, file_path):
-        """读取Word文档 - 无OCR版本（只返回图片位置信息）"""
+        """读取Word文档 - 注意：会关闭文档句柄"""
+        doc = None
         try:
             from docx import Document
-            
             
             # 打开Word文档
             doc = Document(file_path)
@@ -193,23 +197,20 @@ class DocumentReader:
                     for row_idx, row in enumerate(table.rows):
                         row_cells = [cell.text.strip() for cell in row.cells]
                         
-                        # 忽略全空的行
                         if not any(row_cells):
                             continue
                         
-                        # 提取第一行作为表头
                         if not headers:
                             headers = row_cells
                             result.append(" | ".join(headers))
                         else:
-                            # 如果列数对齐，自动把表头和数据拼成 "键:值" 格式 (如：排名:51，城市:潍坊，GDP:7300)
                             if len(headers) == len(row_cells):
                                 row_str = "，".join([f"{k}:{v}" for k, v in zip(headers, row_cells) if v])
                                 result.append(row_str)
                             else:
                                 result.append(" | ".join(row_cells))
             
-            # 检测图片数量（不识别内容）
+            # 检测图片数量
             result.append("\n【图片内容】")
             result.append("-"*40)
             
@@ -228,10 +229,21 @@ class DocumentReader:
         except Exception as e:
             import traceback
             return f"❌ Word读取失败：{str(e)}\n{traceback.format_exc()}"
-            
-            
+        finally:
+            # 关闭文档句柄
+            if doc is not None:
+                try:
+                    # 尝试关闭文档（如果有关闭方法）
+                    if hasattr(doc, 'close'):
+                        doc.close()
+                except:
+                    pass
+            # 强制垃圾回收
+            import gc
+            gc.collect()
+    
     def _read_pdf(self, file_path):
-        """读取PDF文件 - 完整内容"""
+        """读取PDF文件 - 使用 with 语句自动关闭"""
         try:
             with pdfplumber.open(file_path) as pdf:
                 total_pages = len(pdf.pages)
@@ -244,14 +256,12 @@ class DocumentReader:
                     result.append(f"\n📄 第 {page_num} 页")
                     result.append("-"*40)
                     
-                    # 提取页面文字
                     page_text = page.extract_text() or ""
                     if page_text.strip():
                         result.append(page_text)
                     else:
                         result.append("（此页无文字内容）")
                     
-                    # 提取表格
                     tables = page.extract_tables()
                     if tables:
                         result.append("\n表格：")
@@ -280,19 +290,17 @@ class DocumentReader:
             return False
 
 
-# 在文件末尾添加这个模块级别的函数
 def read_document(file_path):
     """模块级别的函数，供 app.py 直接调用"""
     reader = DocumentReader()
     return reader.read(file_path)
 
-# ===== 交互式测试代码 =====
+
 if __name__ == "__main__":
     print("="*60)
     print("📚 文档读取工具 - 完整输出版本")
     print("="*60)
     
-    # 创建读取器
     reader = DocumentReader()
     
     while True:
@@ -306,9 +314,7 @@ if __name__ == "__main__":
         choice = input("请输入选项 (1/2/3): ").strip()
         
         if choice == '1':
-            # 读取单个文件
             file_path = input("\n请输入文件路径：").strip()
-            # 自动去除可能存在的引号
             file_path = file_path.strip('"').strip("'")
             
             if not os.path.exists(file_path):
@@ -316,16 +322,12 @@ if __name__ == "__main__":
                 continue
             
             try:
-                # 读取文件
                 content = reader.read(file_path)
-                
-                # 询问是否保存
                 save = input("\n是否保存到文件？(y/n): ").strip().lower()
                 if save == 'y':
                     output_path = f"output_{os.path.basename(file_path)}.txt"
                     reader.save_to_file(content, output_path)
                 else:
-                    # 如果用户不保存，则显示全部内容
                     print("\n" + "="*60)
                     print("📄 读取结果（完整内容）：")
                     print("="*60)
@@ -335,7 +337,6 @@ if __name__ == "__main__":
                 print(f"❌ 读取失败：{e}")
         
         elif choice == '2':
-            # 批量读取 test_files 文件夹
             test_dir = "test_files"
             
             if not os.path.exists(test_dir):
@@ -355,7 +356,6 @@ if __name__ == "__main__":
                 status = "✅" if ext in reader.supported_formats else "❌"
                 print(f"  {i}. {status} {f}")
             
-            # 创建结果文件夹
             output_dir = "output_results"
             os.makedirs(output_dir, exist_ok=True)
             print("\n开始批量读取...")
@@ -371,7 +371,6 @@ if __name__ == "__main__":
                 
                 try:
                     content = reader.read(file_path)
-                    # 保存结果
                     output_path = os.path.join(output_dir, f"{filename}.txt")
                     reader.save_to_file(content, output_path)
                 except Exception as e:

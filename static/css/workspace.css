@@ -1,6 +1,6 @@
 /* ========== 工作区容器 ========== */
 .workspace-container {
-    padding-top: 90px;  /* 增加顶部留空，避免被固定导航栏遮挡 */
+    padding-top: 90px;
     max-width: 1400px;
     margin: 0 auto;
     padding-left: 32px;
@@ -8,7 +8,7 @@
     padding-bottom: 60px;
 }
 
-/* ========== 顶部导航栏（新增） ========== */
+/* ========== 顶部导航栏 ========== */
 .navbar {
     position: fixed;
     top: 0;
@@ -97,16 +97,80 @@
     stroke: currentColor;
 }
 
-/* 按钮样式 */
+/* ========== 按钮样式（修复居中问题 + 图标颜色一致） ========== */
+
+/* 主要按钮 */
+.btn-primary {
+    background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+    border: none;
+    height: 44px;
+    padding: 0 24px;
+    border-radius: 44px;
+    cursor: pointer;
+    transition: var(--transition);
+    color: white;
+    font-weight: 500;
+    font-size: 0.9rem;
+    font-family: var(--font-sans);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* 次要按钮 */
+.btn-secondary {
+    background: var(--accent-soft);
+    color: var(--text-primary);
+    border: none;
+    height: 40px;
+    padding: 0 20px;
+    border-radius: 40px;
+    cursor: pointer;
+    transition: var(--transition);
+    font-weight: 500;
+    font-size: 0.85rem;
+    font-family: var(--font-sans);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.btn-secondary:hover {
+    background: var(--accent-light);
+    transform: translateY(-1px);
+}
+
+/* 边框按钮 */
 .btn-outline {
     background: transparent;
     border: 1px solid var(--border-focus);
-    padding: 8px 20px;
+    height: 38px;
+    padding: 0 20px;
     border-radius: 40px;
     cursor: pointer;
     transition: var(--transition);
     color: var(--text-secondary);
     font-weight: 480;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
 }
 
 .btn-outline:hover {
@@ -114,20 +178,89 @@
     color: var(--accent-solid);
 }
 
-.btn-primary {
-    background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+/* 通用按钮 */
+.btn {
+    background: var(--accent-solid);
+    color: white;
     border: none;
-    padding: 8px 24px;
-    border-radius: 40px;
+    height: 44px;
+    padding: 0 24px;
+    border-radius: 44px;
     cursor: pointer;
     transition: var(--transition);
-    color: white;
     font-weight: 500;
+    font-size: 0.9rem;
+    font-family: var(--font-sans);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    line-height: 1;
+    white-space: nowrap;
 }
 
-.btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+.btn:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
+/* 按钮内图标样式 - 继承按钮文字颜色 */
+.btn-primary i[data-lucide],
+.btn-secondary i[data-lucide],
+.btn-outline i[data-lucide],
+.btn i[data-lucide] {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+/* 主要按钮图标颜色（白色） */
+.btn-primary i[data-lucide] {
+    color: white;
+}
+
+/* 次要按钮图标颜色（跟随文字颜色） */
+.btn-secondary i[data-lucide] {
+    color: var(--text-primary);
+}
+
+/* 边框按钮图标颜色 */
+.btn-outline i[data-lucide] {
+    color: var(--text-secondary);
+}
+
+.btn-outline:hover i[data-lucide] {
+    color: var(--accent-solid);
+}
+
+/* 通用按钮图标颜色（白色） */
+.btn i[data-lucide] {
+    color: white;
+}
+
+/* 暗色模式下次要按钮图标颜色 */
+.dark .btn-secondary i[data-lucide] {
+    color: var(--text-primary);
+}
+
+/* 纯图标按钮 */
+.btn-icon-only {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon-only i[data-lucide] {
+    width: 20px;
+    height: 20px;
+    margin: 0;
 }
 
 /* ========== 工作区内部导航 ========== */
@@ -161,6 +294,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    font-size: 0.85rem;
 }
 
 .back-home:hover {
@@ -252,13 +386,23 @@
     border: none;
     cursor: pointer;
     color: var(--text-placeholder);
-    padding: 4px 8px;
-    font-size: 16px;
+    padding: 8px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     transition: var(--transition);
 }
 
 .file-remove:hover {
+    background: rgba(229, 62, 62, 0.1);
     color: var(--danger);
+}
+
+.file-remove i[data-lucide] {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
 }
 
 /* ========== 功能卡片网格 ========== */
@@ -291,7 +435,6 @@
 }
 
 .function-icon {
-    font-size: 28px;
     margin-bottom: 8px;
 }
 
@@ -364,39 +507,6 @@
     box-shadow: 0 0 0 2px rgba(44, 62, 102, 0.1);
 }
 
-/* 按钮样式补充 */
-.btn,
-.btn-primary {
-    height: 44px;
-    padding: 0 28px;
-    border: none;
-    border-radius: 40px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: var(--transition);
-    background: var(--accent-solid);
-    color: white;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.btn:hover,
-.btn-primary:hover {
-    background: var(--accent-hover);
-    transform: translateY(-1px);
-}
-
-.btn-secondary {
-    background: var(--accent-soft);
-    color: var(--text-primary);
-}
-
-.btn-secondary:hover {
-    background: var(--accent-light);
-    transform: translateY(-1px);
-}
-
 /* ========== 表格样式 ========== */
 .data-table {
     width: 100%;
@@ -466,6 +576,12 @@
     color: var(--accent-solid);
 }
 
+.message-avatar i[data-lucide] {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+}
+
 .message-content {
     flex: 1;
     background: var(--surface-card);
@@ -474,7 +590,7 @@
     border: 1px solid var(--border-light);
 }
 
-/* ========== 图谱样式 ========== */
+/* ========== 知识图谱样式 ========== */
 .graph-container {
     display: flex;
     gap: 20px;
@@ -483,24 +599,89 @@
 
 .graph-canvas {
     flex: 2;
-    min-width: 400px;
-    height: 400px;
+    min-width: 500px;
+    height: 500px;
     background: var(--bg-subtle);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-xl);
     border: 1px solid var(--border-light);
+    transition: var(--transition);
+    box-shadow: var(--shadow-sm);
+}
+
+.graph-canvas:hover {
+    box-shadow: var(--shadow-md);
 }
 
 .graph-detail {
     flex: 1;
-    background: var(--bg-subtle);
-    border-radius: var(--radius-md);
-    padding: 16px;
+    min-width: 280px;
+    background: var(--surface-card);
+    border-radius: var(--radius-xl);
+    padding: 20px;
     border: 1px solid var(--border-light);
+    transition: var(--transition);
+    box-shadow: var(--shadow-sm);
 }
 
-.graph-detail h4 {
-    margin-bottom: 12px;
+.graph-detail:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.graph-detail .detail-field {
+    margin-bottom: 16px;
+}
+
+.graph-detail .detail-field-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-placeholder);
+    margin-bottom: 6px;
+}
+
+.graph-detail .detail-field-value {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+/* 图谱工具栏 */
+.graph-toolbar {
+    margin-top: 16px;
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.graph-tool-btn {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-light);
+    padding: 8px 16px;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: var(--transition);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 36px;
+}
+
+.graph-tool-btn i[data-lucide] {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+}
+
+.graph-tool-btn:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent-solid);
     color: var(--accent-solid);
+    transform: translateY(-1px);
 }
 
 /* ========== 进度条样式 ========== */
@@ -533,19 +714,15 @@
     border-radius: var(--radius-sm);
     margin-top: 12px;
     border-left: 3px solid var(--danger);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
 }
 
-/* ========== 工具类 ========== */
-.hidden {
-    display: none;
-}
-
-.text-center {
-    text-align: center;
-}
-
-.mt-4 {
-    margin-top: 16px;
+.error-message i[data-lucide] {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
 }
 
 /* ========== 文件列表图标样式 ========== */
@@ -574,10 +751,41 @@
 .dark .file-info [data-lucide="archive"] { stroke: #FBBF24; }
 .dark .file-info [data-lucide="code"] { stroke: #9CA3AF; }
 
+/* ========== 工具类 ========== */
+.hidden {
+    display: none;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.mt-4 {
+    margin-top: 16px;
+}
+
+/* 旋转动画 */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 /* ========== 响应式 ========== */
 @media (max-width: 1000px) {
     .functions-grid {
         grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .graph-canvas {
+        min-width: auto;
+        height: 350px;
+    }
+    
+    .graph-tool-btn {
+        padding: 6px 12px;
+        font-size: 0.7rem;
     }
 }
 
@@ -607,5 +815,12 @@
     
     .upload-section {
         padding: 20px;
+    }
+    
+    .btn-primary,
+    .btn-secondary,
+    .btn {
+        padding: 0 16px;
+        font-size: 0.8rem;
     }
 }

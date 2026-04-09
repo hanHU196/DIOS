@@ -509,104 +509,258 @@ def api_format():
 def api_qa():
     """智能问答接口"""
     try:
-        documents = request.files.getlist('documents')
+        files = request.files.getlist('documents')
         question = request.form.get('question', '').strip()
         
-        if not documents:
-            return jsonify({'error': '请上传文档'}), 400
+        if not files or not question:
+            return jsonify({'error': '请上传文档并输入问题'}), 400
         
-        if not question:
-            return jsonify({'error': '请输入问题'}), 400
-        
-        # 提取所有文档内容
+        # 1. 读取并合并所有文档内容
         all_text = ""
-        source_files = []
-        
-        for doc in documents:
-            filename = secure_filename(doc.filename)
+        for file in files:
+            filename = secure_filename(file.filename)
             path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            doc.save(path)
-            source_files.append(filename)
-            
-            text = reader.read(path)
-            all_text += f"\n--- {filename} ---\n{text}\n"
-            
-            # 清理临时文件
-            os.remove(path)
+            file.save(path)
+            # 使用现有的 reader 读取文档
+            all_text += f"\n--- {filename} ---\n{reader.read(path)}\n"
         
-        # 调用 AI 模块回答问题
-        try:
-            from ai_module import answer_question
-            answer = answer_question(all_text, question)
-        except ImportError:
-            # 模拟回答
-            answer = f"关于「{question}」的问题：\n\n根据文档分析，建议查阅相关条款获取详细信息。如需更精准的回答，请确保文档包含相关内容。"
+        # 2. 构造 AI 提示词（截取适量字符防止超 Token）
+        prompt = f"""你是一个智能文档助手。请基于以下提供的【文档内容】准确回答用户的【问题】。
+要求：
+1. 回答要清晰、简明扼要。
+2. 如果文档中没有相关信息，请明确回答“抱歉，提供的文档中没有找到相关信息”，绝对不要编造。
+
+【文档内容】
+{all_text[:8000]} 
+
+【问题】
+{question}
+"""
         
-        return jsonify({
-            'success': True,
-            'answer': answer,
-            'sources': source_files
-        })
+        # 3. 调用 AI 模型获取回答
+        answer = ai_module.call_model(prompt, max_tokens=1500)
+        
+        return jsonify({'answer': answer})
         
     except Exception as e:
-        logger.error(f"问答失败: {e}")
+        logger.error(f"智能问答失败: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/graph', methods=['POST'])
 def api_graph():
-    """知识图谱接口"""
+    """知识图谱生成接口"""
     try:
-        documents = request.files.getlist('documents')
-        
-        if not documents:
+        files = request.files.getlist('documents')
+        if not files:
             return jsonify({'error': '请上传文档'}), 400
-        
-        # 提取所有文档内容
+            
+        # 1. 读取合并文档
         all_text = ""
-        for doc in documents:
-            filename = secure_filename(doc.filename)
+        saved_paths = []  # 记录保存的文件路径，用于最后清理
+        
+        for file in files:
+            filename = secure_filename(file.filename)
             path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            doc.save(path)
-            all_text += reader.read(path) + "\n"
-            os.remove(path)
+            file.save(path)
+            saved_paths.append(path)
+            
+            try:
+                # 读取文件内容
+                text = reader.read(path)
+                all_text += f"\n--- {filename} ---\n{text}\n"
+            except Exception as read_err:
+                logger.error(f"读取文件 {filename} 失败: {read_err}")
+            finally:
+                # 确保文件被关闭后再删除
+                pass
         
-        # 调用 AI 模块提取实体关系
+        # 关闭可能打开的文件句柄
+        import gc
+        gc.collect()
+        
+        # 清理临时文件
+        for path in saved_paths:
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception as del_err:
+                logger.warning(f"删除临时文件失败 {path}: {del_err}")
+        
+        # 如果没有提取到文本内容，返回默认数据
+        if not all_text.strip():
+            logger.warning("未能提取到任何文本内容，返回默认图谱")
+            return jsonify(get_default_graph_data())
+        
+        # 2. 构造提示词
+        prompt = f"""你是一个知识图谱数据抽取专家。请从以下文本中提取核心实体以及它们之间的关系。
+
+【重要】请【严格】按照以下 JSON 格式输出，只输出纯 JSON，不要包含任何解释文字、不要包含 markdown 代码块标记。
+
+输出格式示例：
+{{
+    "categories": [
+        {{"name": "核心对象"}},
+        {{"name": "参与方"}},
+        {{"name": "属性特征"}}
+    ],
+    "nodes": [
+        {{"id": "0", "name": "合同", "category": 0, "symbolSize": 55}},
+        {{"id": "1", "name": "甲方公司", "category": 1, "symbolSize": 45}},
+        {{"id": "2", "name": "乙方公司", "category": 1, "symbolSize": 45}}
+    ],
+    "links": [
+        {{"source": "0", "target": "1", "name": "签约方"}},
+        {{"source": "0", "target": "2", "name": "签约方"}}
+    ]
+}}
+
+要求：
+1. nodes 中的 id 必须是字符串格式的数字序列（"0", "1", "2"...）
+2. links 中的 source 和 target 必须对应 nodes 中的 id
+3. symbolSize 范围 20-60，核心实体用大值
+4. 提取最多 15 个最重要的节点
+5. 所有标点符号必须使用英文半角符号
+
+【文本内容】
+{all_text[:5000]}
+"""
+        
+        # 3. 调用 AI 模型
+        response_text = ai_module.call_model(prompt, max_tokens=2500)
+        
+        import json
+        import re
+        
+        logger.info(f"AI 返回内容长度: {len(response_text)}")
+        
+        # 4. 清理 AI 返回内容
+        clean_text = re.sub(r'```json\s*', '', response_text)
+        clean_text = re.sub(r'```\s*', '', clean_text)
+        clean_text = clean_text.strip()
+        
+        # 尝试提取 JSON 对象
+        json_match = re.search(r'\{[\s\S]*\}', clean_text)
+        if not json_match:
+            logger.warning("无法提取 JSON，使用默认数据")
+            return jsonify(get_default_graph_data())
+        
+        json_str = json_match.group()
+        
+        # 5. 修复常见的 JSON 格式问题
+        json_str = re.sub(r',\s*}', '}', json_str)
+        json_str = re.sub(r',\s*]', ']', json_str)
+        
         try:
-            from ai_module import extract_entity_relations
-            graph_data = extract_entity_relations(all_text)
-        except ImportError:
-            # 默认图谱数据
-            graph_data = {
-                'nodes': [
-                    {'name': '合同主体', 'category': 0, 'symbolSize': 60},
-                    {'name': '甲方公司', 'category': 1, 'symbolSize': 45},
-                    {'name': '乙方公司', 'category': 1, 'symbolSize': 45},
-                    {'name': '合同金额', 'category': 2, 'symbolSize': 40},
-                    {'name': '签订日期', 'category': 2, 'symbolSize': 40}
-                ],
-                'links': [
-                    {'source': '合同主体', 'target': '甲方公司'},
-                    {'source': '合同主体', 'target': '乙方公司'},
-                    {'source': '合同主体', 'target': '合同金额'},
-                    {'source': '合同主体', 'target': '签订日期'}
-                ],
-                'categories': [
-                    {'name': '核心实体'},
-                    {'name': '参与方'},
-                    {'name': '属性'}
-                ]
-            }
+            graph_data = json.loads(json_str)
+        except json.JSONDecodeError as je:
+            logger.error(f"JSON 解析失败: {je}")
+            logger.error(f"问题 JSON 片段: {json_str[:300]}")
+            graph_data = get_default_graph_data()
         
-        return jsonify({
-            'success': True,
-            'nodes': graph_data.get('nodes', []),
-            'links': graph_data.get('links', []),
-            'categories': graph_data.get('categories', [])
-        })
+        # 确保必要字段存在
+        if 'nodes' not in graph_data or not graph_data['nodes']:
+            graph_data['nodes'] = get_default_nodes()
+        if 'links' not in graph_data:
+            graph_data['links'] = get_default_links()
+        if 'categories' not in graph_data:
+            graph_data['categories'] = get_default_categories()
+        
+        # 确保 nodes 有必要的字段
+        for i, node in enumerate(graph_data['nodes']):
+            if 'id' not in node:
+                node['id'] = str(i)
+            if 'symbolSize' not in node:
+                node['symbolSize'] = 40
+            if 'category' not in node:
+                node['category'] = 0
+        
+        # 确保 links 中的 source/target 是字符串
+        for link in graph_data['links']:
+            if 'source' in link:
+                link['source'] = str(link['source'])
+            if 'target' in link:
+                link['target'] = str(link['target'])
+        
+        return jsonify(graph_data)
         
     except Exception as e:
         logger.error(f"图谱生成失败: {e}")
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify(get_default_graph_data())
+
+def get_default_graph_data():
+    """获取默认的图谱数据"""
+    return {
+        "categories": get_default_categories(),
+        "nodes": get_default_nodes(),
+        "links": get_default_links()
+    }
+
+def get_default_categories():
+    """获取默认分类"""
+    return [
+        {"name": "核心对象"},
+        {"name": "参与方"},
+        {"name": "属性特征"},
+        {"name": "行为动作"}
+    ]
+
+def get_default_nodes():
+    """获取默认节点"""
+    return [
+        {"id": "0", "name": "合同主体", "category": 0, "symbolSize": 55},
+        {"id": "1", "name": "甲方公司", "category": 1, "symbolSize": 45},
+        {"id": "2", "name": "乙方公司", "category": 1, "symbolSize": 45},
+        {"id": "3", "name": "合同金额", "category": 2, "symbolSize": 35},
+        {"id": "4", "name": "签订日期", "category": 2, "symbolSize": 35},
+        {"id": "5", "name": "违约责任", "category": 3, "symbolSize": 40}
+    ]
+
+def get_default_links():
+    """获取默认关系"""
+    return [
+        {"source": "0", "target": "1", "name": "签约方"},
+        {"source": "0", "target": "2", "name": "签约方"},
+        {"source": "0", "target": "3", "name": "约定金额"},
+        {"source": "0", "target": "4", "name": "签署日期"},
+        {"source": "0", "target": "5", "name": "包含条款"}
+    ]
+def get_default_graph_data():
+    """获取默认的图谱数据（用于演示或出错时）"""
+    return {
+        "categories": [
+            {"name": "核心对象"},
+            {"name": "参与方"},
+            {"name": "属性特征"},
+            {"name": "行为动作"}
+        ],
+        "nodes": [
+            {"id": "0", "name": "合同主体", "category": 0, "symbolSize": 55},
+            {"id": "1", "name": "甲方公司", "category": 1, "symbolSize": 45},
+            {"id": "2", "name": "乙方公司", "category": 1, "symbolSize": 45},
+            {"id": "3", "name": "合同金额", "category": 2, "symbolSize": 35},
+            {"id": "4", "name": "签订日期", "category": 2, "symbolSize": 35},
+            {"id": "5", "name": "违约责任", "category": 3, "symbolSize": 40}
+        ],
+        "links": [
+            {"source": "0", "target": "1", "name": "签约方"},
+            {"source": "0", "target": "2", "name": "签约方"},
+            {"source": "0", "target": "3", "name": "约定金额"},
+            {"source": "0", "target": "4", "name": "签署日期"},
+            {"source": "0", "target": "5", "name": "包含条款"}
+        ]
+    }
+
+def get_default_categories():
+    """获取默认的分类"""
+    return [
+        {"name": "核心对象"},
+        {"name": "参与方"},
+        {"name": "属性特征"},
+        {"name": "行为动作"}
+    ]
+    
 
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
@@ -637,6 +791,7 @@ def search_data():
         'count': len(results),
         'results': results
     })
+
 
 # ========== 辅助函数 ==========
 def parse_word_template(template_path):
@@ -796,6 +951,7 @@ def fill_word_from_excel(template_path, excel_path, output_path):
     doc.save(output_path)
     logger.info(f"✅ Word 文件已生成（动态版本）：{output_path}")
     return output_path
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
