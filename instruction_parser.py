@@ -33,8 +33,8 @@ class InstructionOperator:
         else:
             return {'success': False, 'error': '不支持的文件类型'}
         
-        # 解析指令
-        command = self.deepseek.parse_instruction(instruction, file_type)
+        # 解析指令（修复：不要传 file_type 参数）
+        command = self.deepseek.parse_instruction(instruction)  # ← 这里去掉 , file_type
         logger.info(f"解析结果: {command}")
         
         if command.get('action') == 'unknown':
@@ -45,28 +45,30 @@ class InstructionOperator:
             return self._execute_word(command, file_path)
         else:
             return self._execute_excel(command, file_path)
-    
     def _execute_word(self, command, file_path):
-        """执行 Word 操作"""
+        """执行 Word 操作（支持合并后的属性）"""
         try:
+            from docx.shared import Pt, RGBColor
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            
             doc = Document(file_path)
             action = command.get('action')
             position = command.get('position')
             target = command.get('target', 'all')
             size = command.get('size')
             font_name = command.get('font', '')
-            font_color = command.get('font_color', '')
+            font_color = command.get('color', '')
             
             # 颜色映射
             color_map = {
-                '红色': RGBColor(255, 0, 0),
-                '蓝色': RGBColor(0, 0, 255),
-                '绿色': RGBColor(0, 255, 0),
-                '黑色': RGBColor(0, 0, 0)
+                'red': RGBColor(255, 0, 0),
+                'blue': RGBColor(0, 0, 255),
+                'green': RGBColor(0, 255, 0),
+                'black': RGBColor(0, 0, 0)
             }
             
             # 确定段落
-            if position and target == 'paragraph':
+            if position is not None and target == 'paragraph':
                 if 1 <= position <= len(doc.paragraphs):
                     paragraphs = [doc.paragraphs[position - 1]]
                 else:
@@ -76,12 +78,13 @@ class InstructionOperator:
             
             # 应用格式
             for para in paragraphs:
+                # 字体样式应用到每个 run
                 for run in para.runs:
-                    if action == 'bold':
+                    if action == 'bold' or command.get('bold'):
                         run.bold = True
-                    elif action == 'italic':
+                    if action == 'italic' or command.get('italic'):
                         run.italic = True
-                    elif action == 'underline':
+                    if action == 'underline' or command.get('underline'):
                         run.underline = True
                     if font_name:
                         run.font.name = font_name
@@ -104,7 +107,6 @@ class InstructionOperator:
         except Exception as e:
             logger.error(f"Word 操作失败: {e}")
             return {'success': False, 'error': str(e)}
-    
     def _execute_excel(self, command, file_path):
         """执行 Excel 操作"""
         try:

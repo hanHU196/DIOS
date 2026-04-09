@@ -562,6 +562,12 @@ def api_format_batch():
         files = request.files.getlist('documents')
         command = request.form.get('command', '').strip()
         
+        print("=" * 50)
+        print(f"收到格式调整请求")
+        print(f"文件数量: {len(files)}")
+        print(f"指令: {command}")
+        print("=" * 50)
+        
         if not files or not command:
             return jsonify({'error': '请上传文档并输入指令'}), 400
         
@@ -572,8 +578,12 @@ def api_format_batch():
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
             
+            print(f"处理文件: {filename}")
+            
             # 执行指令（InstructionOperator 会自动识别文件类型）
             result = instruction_operator.execute(command, file_path)
+            
+            print(f"执行结果: {result}")
             
             if result.get('success'):
                 output_filename = f'formatted_{filename}'
@@ -585,13 +595,47 @@ def api_format_batch():
             else:
                 logger.error(f"格式调整失败: {filename}, {result.get('error')}")
             
-            os.remove(file_path)
+            # 清理临时文件
+            try:
+                os.remove(file_path)
+            except:
+                pass
         
-        # 返回文件...
+        if not output_files:
+            return jsonify({'error': '所有文档处理失败'}), 400
+        
+        # ========== 关键修复：返回文件 ==========
+        if len(output_files) == 1:
+            # 单个文件直接返回
+            return send_file(
+                output_files[0], 
+                as_attachment=True, 
+                download_name=os.path.basename(output_files[0])
+            )
+        else:
+            # 多个文件打包成 ZIP
+            import zipfile
+            import io
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for file_path in output_files:
+                    zip_file.write(file_path, os.path.basename(file_path))
+            zip_buffer.seek(0)
+            return send_file(
+                zip_buffer, 
+                mimetype='application/zip', 
+                as_attachment=True, 
+                download_name='formatted_documents.zip'
+            )
         
     except Exception as e:
+        logger.error(f"格式调整失败: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+    
 
+    
 @app.route('/api/qa', methods=['POST'])
 def api_qa():
     """智能问答接口"""
