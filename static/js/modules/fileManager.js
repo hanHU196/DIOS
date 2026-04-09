@@ -1,4 +1,4 @@
-// 文件管理模块
+// 全局文件管理
 class FileManager {
     constructor() {
         this.files = [];
@@ -78,9 +78,6 @@ class FileManager {
         
         if (this.files.length === 0) {
             this.fileListContainer.classList.add('hidden');
-            if (this.fileCountSpan) {
-                this.fileCountSpan.textContent = '0';
-            }
             return;
         }
         
@@ -93,17 +90,12 @@ class FileManager {
         this.files.forEach((file, idx) => {
             const item = document.createElement('div');
             item.className = 'file-item';
-            // 使用 Utils.getFileIcon 获取 Lucide 图标
-            const iconHtml = typeof Utils !== 'undefined' && Utils.getFileIcon 
-                ? Utils.getFileIcon(file.name) 
-                : `<span style="font-size: 20px;">📄</span>`;
-            
             item.innerHTML = `
                 <div class="file-info">
-                    ${iconHtml}
+                    <span style="font-size: 20px;">${Utils.getFileIcon(file.name)}</span>
                     <div>
-                        <div style="font-size: 0.85rem; font-weight: 500;">${this.escapeHtml(file.name)}</div>
-                        <div style="font-size: 0.7rem; color: var(--text-placeholder);">${this.formatFileSize(file.size)}</div>
+                        <div style="font-size: 0.85rem;">${file.name}</div>
+                        <div style="font-size: 0.7rem; color: var(--text-placeholder);">${Utils.formatFileSize(file.size)}</div>
                     </div>
                 </div>
                 <button class="file-remove" data-index="${idx}">✕</button>
@@ -111,33 +103,11 @@ class FileManager {
             this.fileListBody.appendChild(item);
         });
         
-        // 重新初始化 Lucide 图标
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        }
-        
         this.fileListBody.querySelectorAll('.file-remove').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const idx = parseInt(btn.dataset.index);
                 this.removeFile(idx);
             });
-        });
-    }
-    
-    formatFileSize(bytes) {
-        if (bytes === 0) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-    
-    escapeHtml(str) {
-        return str.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
         });
     }
     
@@ -148,18 +118,15 @@ class FileManager {
         dropArea.addEventListener('dragover', (e) => {
             e.preventDefault();
             dropArea.style.borderColor = 'var(--accent-solid)';
-            dropArea.style.backgroundColor = 'var(--accent-soft)';
         });
         
         dropArea.addEventListener('dragleave', () => {
             dropArea.style.borderColor = '';
-            dropArea.style.backgroundColor = '';
         });
         
         dropArea.addEventListener('drop', (e) => {
             e.preventDefault();
             dropArea.style.borderColor = '';
-            dropArea.style.backgroundColor = '';
             const files = Array.from(e.dataTransfer.files);
             this.addFiles(files);
         });

@@ -11,7 +11,7 @@ class DatabaseManager:
     """
     
     # ========== 在这里切换数据库开关 ==========
-    ENABLE_DB = False   # True: 启用数据库, False: 禁用数据库（测试模式）
+    ENABLE_DB = True  # True: 启用数据库, False: 禁用数据库（测试模式）
     # ========================================
     
     def __init__(self, uri="mongodb://localhost:27017/", db_name="doc_mind"):
@@ -43,24 +43,38 @@ class DatabaseManager:
             return
         
         try:
-            # 文档索引
+            # ========== 历史文档集合索引 ==========
+            # 普通索引
+            self.db.history_documents.create_index([('original_name', 1)])
+            self.db.history_documents.create_index([('created_at', -1)])
+            self.db.history_documents.create_index([('timestamp', -1)])
+            # 全文索引（用于搜索）
+            self.db.history_documents.create_index([('original_name', 'text')])
+            print("✅ history_documents 索引创建完成")
+            
+            # ========== 文档集合索引 ==========
             self.db.documents.create_index([('filename', 1)])
             self.db.documents.create_index([('timestamp', -1)])
             self.db.documents.create_index([('hash', 1)])
+            print("✅ documents 索引创建完成")
             
-            # 提取记录索引
+            # ========== 提取记录索引 ==========
             self.db.extracted_records.create_index([('source_files', 1)])
             self.db.extracted_records.create_index([('timestamp', -1)])
+            print("✅ extracted_records 索引创建完成")
             
-            # 填表历史索引
+            # ========== 填表历史索引 ==========
             self.db.fill_history.create_index([('template', 1)])
             self.db.fill_history.create_index([('timestamp', -1)])
+            print("✅ fill_history 索引创建完成")
             
-            # 缓存索引
+            # ========== 缓存索引 ==========
             self.db.cache.create_index([('key', 1)], unique=True)
             self.db.cache.create_index([('timestamp', -1)])
+            print("✅ cache 索引创建完成")
             
-            print("✅ 数据库索引创建完成")
+            print("🎉 所有数据库索引创建完成")
+        
         except Exception as e:
             print(f"⚠️ 索引创建失败：{e}")
     
@@ -174,6 +188,35 @@ class DatabaseManager:
         except Exception as e:
             print(f"⚠️ 查询填表历史失败：{e}")
             return []
+        
+    def check_history_exists(self, original_name, size):
+        """检查历史记录中是否已存在相同文件（通过文件名和大小判断）"""
+        if not self.enabled:
+            return False
+        
+        try:
+            existing = self.db.history_documents.find_one({
+                'original_name': original_name,
+                'size': size
+            })
+            return existing is not None
+        except Exception as e:
+            print(f"⚠️ 检查历史重复失败：{e}")
+            return False
+
+    def get_history_by_name_and_size(self, original_name, size):
+        """根据文件名和大小获取历史文档"""
+        if not self.enabled:
+            return None
+        
+        try:
+            return self.db.history_documents.find_one({
+                'original_name': original_name,
+                'size': size
+            })
+        except Exception as e:
+            print(f"⚠️ 查询历史文档失败：{e}")
+            return None
     
     # ========== 缓存管理 ==========
     def get_cached_result(self, doc_path, fields):
@@ -266,3 +309,132 @@ class DatabaseManager:
         if self.enabled and self.client:
             self.client.close()
             print("🔌 数据库连接已关闭")
+            # ========== 历史文档管理 ==========
+
+    def save_history_document(self, filename, original_name, size, file_type, content_preview, temp_path):
+        """保存文档到历史记录（将文件内容存储为 base64）"""
+        if not self.enabled:
+            return None
+        
+        try:
+            import base64
+            
+            # 读取文件内容并转为 base64
+            with open(temp_path, 'rb') as f:
+                file_content = base64.b64encode(f.read()).decode('utf-8')
+            
+            doc = {
+                'original_name': original_name,
+                'filename': filename,
+                'size': size,
+                'type': file_type,
+                'content_preview': content_preview[:300],
+                'file_content': file_content,  # base64 编码的文件内容
+                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'created_at': datetime.now()
+            }
+            
+            result = self.db.history_documents.insert_one(doc)
+            return result.inserted_id
+            
+        except Exception as e:
+            print(f"⚠️ 保存历史文档失败：{e}")
+            return None
+
+    def get_history_documents(self, limit=100, skip=0):
+        """获取历史文档列表"""
+        if not self.enabled:
+            return []
+        
+        try:
+            results = self.db.history_documents.find()\
+                .sort('created_at', -1)\
+                .skip(skip)\
+                .limit(limit)
+            
+            return [{
+                '_id': str(r['_id']),
+                'name': r['original_name'],
+                'size': r['size'],
+                'type': r['type'],
+                'content_preview': r.get('content_preview', ''),
+                'timestamp': r['timestamp']
+            } for r in results]
+            
+        except Exception as e:
+            print(f"⚠️ 获取历史文档失败：{e}")
+            return []
+
+    def get_history_document_by_id(self, doc_id):
+        """根据 ID 获取历史文档"""
+        if not self.enabled:
+            return None
+        
+        try:
+            from bson import ObjectId
+            result = self.db.history_documents.find_one({'_id': ObjectId(doc_id)})
+            if result:
+                return {
+                    '_id': str(result['_id']),
+                    'original_name': result['original_name'],
+                    'filename': result['filename'],
+                    'size': result['size'],
+                    'type': result['type'],
+                    'file_content': result['file_content'],
+                    'content_preview': result.get('content_preview', ''),
+                    'timestamp': result['timestamp']
+                }
+            return None
+            
+        except Exception as e:
+            print(f"⚠️ 获取历史文档失败：{e}")
+            return None
+
+    def delete_history_documents(self, doc_ids):
+        """删除历史文档"""
+        if not self.enabled:
+            return 0
+        
+        try:
+            from bson import ObjectId
+            object_ids = [ObjectId(doc_id) for doc_id in doc_ids]
+            result = self.db.history_documents.delete_many({'_id': {'$in': object_ids}})
+            return result.deleted_count
+            
+        except Exception as e:
+            print(f"⚠️ 删除历史文档失败：{e}")
+            return 0
+
+    def clear_all_history(self):
+        """清空所有历史文档"""
+        if not self.enabled:
+            return
+        
+        try:
+            self.db.history_documents.delete_many({})
+            print("🧹 已清空所有历史文档")
+        except Exception as e:
+            print(f"⚠️ 清空历史失败：{e}")
+
+    def search_history_documents(self, keyword):
+        """搜索历史文档"""
+        if not self.enabled:
+            return []
+        
+        try:
+            results = self.db.history_documents.find({
+                'original_name': {'$regex': keyword, '$options': 'i'}
+            }).sort('created_at', -1).limit(50)
+            
+            return [{
+                '_id': str(r['_id']),
+                'name': r['original_name'],
+                'size': r['size'],
+                'type': r['type'],
+                'content_preview': r.get('content_preview', ''),
+                'timestamp': r['timestamp']
+            } for r in results]
+            
+        except Exception as e:
+            print(f"⚠️ 搜索历史文档失败：{e}")
+            return []

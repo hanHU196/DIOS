@@ -768,29 +768,197 @@ def get_stats():
     stats = db.get_statistics()
     return jsonify(stats)
 
-@app.route('/api/history', methods=['GET'])
-def get_history():
-    """获取填表历史"""
-    limit = request.args.get('limit', 20, type=int)
-    history = db.get_fill_history(limit)
-    return jsonify({'success': True, 'history': history})
+# ========== 历史文档管理 API ==========
 
-@app.route('/api/search', methods=['POST'])
-def search_data():
-    """跨文档搜索"""
-    data = request.get_json()
-    field = data.get('field')
-    value = data.get('value')
-    
-    if not field or not value:
-        return jsonify({'error': '请提供字段和值'}), 400
-    
-    results = db.query_extractions(field, value)
-    return jsonify({
-        'success': True,
-        'count': len(results),
-        'results': results
-    })
+@app.route('/api/history/list', methods=['GET'])
+def get_history_list():
+    """获取历史文档列表"""
+    try:
+        # 从数据库获取历史文档
+        history_list = db.get_history_documents()
+        return jsonify({
+            'success': True,
+            'data': history_list,
+            'count': len(history_list)
+        })
+    except Exception as e:
+        logger.error(f"获取历史列表失败: {e}")
+        return jsonify({'success': False, 'error': str(e), 'data': []}), 500
+
+@app.route('/api/history/add', methods=['POST'])
+def add_to_history():
+    """添加文档到历史记录（带去重）"""
+    try:
+        files = request.files.getlist('files')
+        if not files:
+            return jsonify({'success': False, 'error': '请上传文件'}), 400
+        
+        added = []
+        skipped = []
+        
+        for file in files:
+            filename = secure_filename(file.filename)
+            file_size = file.content_length
+            
+            # 如果没有 content_length，需要先保存再获取大小
+            if not file_size:
+                temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{filename}")
+                file.save(temp_path)
+                file_size = os.path.getsize(temp_path)
+                os.remove(temp_path)
+            
+            # 检查是否已存在（通过文件名和大小）
+            exists = db.check_history_exists(file.filename, file_size)
+            if exists:
+                skipped.append(file.filename)
+                continue
+            
+            # 保存文件到临时目录
+            temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{filename}")
+            file.save(temp_path)
+            
+            # 读取文件内容（用于预览）
+            try:
+                content_preview = reader.read(temp_path)[:200]
+            except:
+                content_preview = ""
+            
+            # 保存到数据库
+            doc_id = db.save_history_document(
+                filename=filename,
+                original_name=file.filename,
+                size=file_size,
+                file_type=filename.split('.')[-1] if '.' in filename else 'unknown',
+                content_preview=content_preview,
+                temp_path=temp_path
+            )
+            
+            if doc_id:
+                added.append({
+                    'id': str(doc_id),
+                    'name': file.filename,
+                    'size': file_size,
+                    'type': filename.split('.')[-1] if '.' in filename else 'unknown'
+                })
+            
+            # 清理临时文件
+            try:
+                os.remove(temp_path)
+            except:
+                pass
+        
+        return jsonify({
+            'success': True,
+            'message': f'成功添加 {len(added)} 个文档到历史' + (f'，跳过 {len(skipped)} 个重复文档' if skipped else ''),
+            'data': added,
+            'skipped': skipped
+        })
+        
+    except Exception as e:
+        logger.error(f"添加历史失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+@app.route('/api/history/import', methods=['POST'])
+def import_from_history():
+    """从历史记录导入文档到当前工作区"""
+    try:
+        data = request.get_json()
+        doc_ids = data.get('ids', [])
+        
+        if not doc_ids:
+            return jsonify({'success': False, 'error': '请选择要导入的文档'}), 400
+        
+        imported_files = []
+        for doc_id in doc_ids:
+            # 从数据库获取文档
+            doc = db.get_history_document_by_id(doc_id)
+            if doc:
+                # 创建临时文件供前端下载或使用
+                temp_filename = secure_filename(doc['original_name'])
+                temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"import_{temp_filename}")
+                
+                # 将 base64 内容写回文件
+                import base64
+                file_content = base64.b64decode(doc['file_content'])
+                with open(temp_path, 'wb') as f:
+                    f.write(file_content)
+                
+                imported_files.append({
+                    'id': str(doc['_id']),
+                    'name': doc['original_name'],
+                    'size': doc['size'],
+                    'temp_path': temp_path
+                })
+        
+        return jsonify({
+            'success': True,
+            'message': f'成功导入 {len(imported_files)} 个文档',
+            'files': imported_files
+        })
+        
+    except Exception as e:
+        logger.error(f"导入历史失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/history/delete', methods=['POST'])
+def delete_history():
+    """删除历史文档"""
+    try:
+        data = request.get_json()
+        doc_ids = data.get('ids', [])
+        
+        if not doc_ids:
+            return jsonify({'success': False, 'error': '请选择要删除的文档'}), 400
+        
+        deleted = db.delete_history_documents(doc_ids)
+        
+        return jsonify({
+            'success': True,
+            'message': f'成功删除 {deleted} 个文档',
+            'deleted': deleted
+        })
+        
+    except Exception as e:
+        logger.error(f"删除历史失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/history/clear', methods=['POST'])
+def clear_all_history():
+    """清空所有历史文档"""
+    try:
+        db.clear_all_history()
+        return jsonify({
+            'success': True,
+            'message': '已清空所有历史文档'
+        })
+        
+    except Exception as e:
+        logger.error(f"清空历史失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/history/search', methods=['POST'])
+def search_history():
+    """搜索历史文档"""
+    try:
+        data = request.get_json()
+        keyword = data.get('keyword', '').strip()
+        
+        if not keyword:
+            results = db.get_history_documents(limit=50)
+        else:
+            results = db.search_history_documents(keyword)
+        
+        return jsonify({
+            'success': True,
+            'data': results,
+            'count': len(results)
+        })
+        
+    except Exception as e:
+        logger.error(f"搜索历史失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+
 
 
 # ========== 辅助函数 ==========

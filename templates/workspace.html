@@ -17,7 +17,7 @@
             <div class="nav-links">
                 <a href="/" class="nav-link">首页</a>
                 <a href="#" class="nav-link" id="featuresLink">功能</a>
-                <a href="#" class="nav-link" id="pricingLink">定价</a>
+                <a href="#" class="nav-link" id="pricingLink">订阅</a>
             </div>
             <div class="nav-buttons">
                 <!-- 主题切换按钮 -->
@@ -33,13 +33,21 @@
     <!-- 工作区主要内容 -->
     <div class="workspace-container">
         <!-- 工作区内导航（保留，作为快速返回） -->
-        <div class="workspace-nav">
+        <div class="workspace-header">
             <div class="workspace-title">
                 <i data-lucide="briefcase" style="width: 24px; height: 24px; vertical-align: middle; margin-right: 8px;"></i>
                 智能文档工作区
             </div>
+            <div class="workspace-divider"></div>
+            <div class="workspace-actions">
+                <button class="history-toggle-btn" id="historyToggleBtn">
+                    <i data-lucide="clock" style="width: 14px; height: 14px;"></i>
+                    历史文档
+                    <span class="history-badge-small" id="historyBadge">0</span>
+                </button>
+            </div>
         </div>
-
+        
         <!-- 统一上传区域 -->
         <div class="upload-section">
             <div class="file-drop-area" id="workspaceDropArea">
@@ -62,6 +70,10 @@
                 </div>
                 <div id="globalFileListBody" class="file-list"></div>
             </div>
+        </div>
+        <!-- 功能选择区域上方添加历史文档按钮 -->
+        <div class="functions-header">
+            <div class="functions-title">选择处理功能</div>
         </div>
 
         <!-- 功能选择 -->
@@ -87,6 +99,55 @@
                 <div class="function-title">知识图谱</div>
             </div>
         </div>
+
+        <!-- ========== 历史文档侧边栏 ========== -->
+        <div class="history-sidebar" id="historySidebar">
+            <div class="history-sidebar-header">
+                <div class="history-sidebar-title">
+                    <i data-lucide="clock"></i>
+                    历史文档
+                    <span class="history-badge" id="historyCount">0</span>
+                </div>
+                <button class="history-sidebar-close" id="historySidebarClose">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            
+            <!-- 搜索框 -->
+            <div class="history-search">
+                <i data-lucide="search"></i>
+                <input type="text" id="historySearchInput" placeholder="搜索历史文档...">
+            </div>
+            
+            <!-- 历史文档列表 -->
+            <div class="history-list" id="historyList">
+                <div class="history-empty">
+                    <i data-lucide="archive"></i>
+                    <p>暂无历史文档</p>
+                    <small>上传文档后会自动保存</small>
+                </div>
+            </div>
+            
+            <!-- 底部操作栏 -->
+            <div class="history-sidebar-footer" id="historyFooter" style="display: none;">
+                <label class="history-select-all">
+                    <input type="checkbox" id="selectAllHistory"> 全选
+                </label>
+                <div class="history-footer-actions">
+                    <button class="history-action-btn" id="importSelectedBtn">
+                        <i data-lucide="import"></i>
+                        导入选中 (<span id="selectedCount">0</span>)
+                    </button>
+                    <button class="history-action-btn danger" id="deleteSelectedBtn">
+                        <i data-lucide="trash-2"></i>
+                        删除
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 侧边栏遮罩层 -->
+        <div class="history-overlay" id="historyOverlay"></div>
 
         <!-- 结果区域 -->
         <div class="result-section">

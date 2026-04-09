@@ -3,9 +3,591 @@ let currentFileManager = null;
 let currentFunction = null;
 let currentChart = null;
 
+// ========== 历史文档管理（对接后端数据库） ==========
+let historyDocuments = [];
+
+// 从后端加载历史文档
+async function loadHistoryFromServer() {
+    try {
+        const response = await fetch('/api/history/list');
+        const data = await response.json();
+        if (data.success) {
+            historyDocuments = data.data || [];
+            renderHistoryList();
+            updateHistoryCount();
+        } else {
+            console.error('加载历史失败:', data.error);
+        }
+    } catch (error) {
+        console.error('加载历史失败:', error);
+    }
+}
+
+// 在文件开头添加标记
+let isImportingFromHistory = false;
+
+// 修改 addToHistory 函数，检查标记
+async function addToHistory(file) {
+    // 如果是历史导入操作，跳过保存
+    if (isImportingFromHistory) {
+        console.log('跳过历史导入文件的保存');
+        return;
+    }
+    
+    try {
+        const formData = new FormData();
+        formData.append('files', file);
+        
+        const response = await fetch('/api/history/add', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            await loadHistoryFromServer();
+        }
+    } catch (error) {
+        console.error('保存到历史失败:', error);
+    }
+}
+
+// 修改 importFromHistory 函数
+async function importFromHistory(items) {
+    const ids = items.map(item => item._id);
+    try {
+        const response = await fetch('/api/history/import', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ ids: ids })
+        });
+        
+        const data = await response.json();
+        if (data.success && data.files) {
+            // 设置标记，避免重复保存
+            isImportingFromHistory = true;
+            
+            for (const fileInfo of data.files) {
+                // 通过 temp_path 下载文件并添加到 fileManager
+                const fileResponse = await fetch(fileInfo.temp_path);
+                const blob = await fileResponse.blob();
+                const file = new File([blob], fileInfo.name, { type: 'application/octet-stream' });
+                if (currentFileManager) {
+                    currentFileManager.addFiles([file]);
+                }
+            }
+            
+            // 延迟重置标记，确保 onChange 回调执行完毕
+            setTimeout(() => {
+                isImportingFromHistory = false;
+            }, 500);
+        }
+    } catch (error) {
+        console.error('导入失败:', error);
+        alert('导入失败: ' + error.message);
+        isImportingFromHistory = false;
+    }
+}
+
+// 删除历史文档（单个或多个）
+async function deleteHistoryItem(id) {
+    try {
+        const response = await fetch('/api/history/delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ ids: [id] })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            await loadHistoryFromServer();
+        }
+    } catch (error) {
+        console.error('删除失败:', error);
+        alert('删除失败: ' + error.message);
+    }
+}
+
+// 清空所有历史文档
+async function clearAllHistory() {
+    if (!confirm('确定要清空所有历史文档吗？此操作不可恢复。')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/history/clear', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            await loadHistoryFromServer();
+        }
+    } catch (error) {
+        console.error('清空失败:', error);
+        alert('清空失败: ' + error.message);
+    }
+}
+
+// 搜索历史文档
+async function searchHistory(keyword) {
+    try {
+        const response = await fetch('/api/history/search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ keyword: keyword })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            historyDocuments = data.data || [];
+            renderHistoryList();
+            updateHistoryCount();
+        }
+    } catch (error) {
+        console.error('搜索失败:', error);
+    }
+}
+
+// 更新历史文档数量显示
+function updateHistoryCount() {
+    const countSpan = document.getElementById('historyCount');
+    if (countSpan) {
+        countSpan.textContent = historyDocuments.length;
+    }
+}
+
+// 格式化文件大小
+function formatFileSizeForHistory(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// 格式化日期
+function formatDate(timestamp) {
+    if (!timestamp) return '未知';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    
+    if (diff < 60 * 1000) return '刚刚';
+    if (diff < 60 * 60 * 1000) return `${Math.floor(diff / (60 * 1000))}分钟前`;
+    if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / (60 * 60 * 1000))}小时前`;
+    if (diff < 7 * 24 * 60 * 60 * 1000) return `${Math.floor(diff / (24 * 60 * 60 * 1000))}天前`;
+    return date.toLocaleDateString();
+}
+
+// 获取文件图标
+function getHistoryFileIcon(fileName) {
+    const ext = fileName.split('.').pop().toLowerCase();
+    const icons = {
+        txt: 'file-text',
+        docx: 'file-text',
+        md: 'file-text',
+        xlsx: 'table',
+        xls: 'table',
+        pdf: 'file',
+        jpg: 'image',
+        png: 'image',
+        zip: 'archive'
+    };
+    return icons[ext] || 'file';
+}
+
+// 渲染历史文档列表
+function renderHistoryList() {
+    const historyList = document.getElementById('historyList');
+    const historyFooter = document.getElementById('historyFooter');
+    
+    if (!historyList) return;
+    
+    if (historyDocuments.length === 0) {
+        historyList.innerHTML = `
+            <div class="history-empty">
+                <i data-lucide="archive"></i>
+                <p>暂无历史文档</p>
+                <small>上传文档后会自动保存到历史记录</small>
+            </div>
+        `;
+        if (historyFooter) historyFooter.style.display = 'none';
+        lucide.createIcons();
+        return;
+    }
+    
+    if (historyFooter) historyFooter.style.display = 'flex';
+    
+    historyList.innerHTML = '';
+    historyDocuments.forEach(doc => {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.innerHTML = `
+            <div class="history-item-checkbox">
+                <input type="checkbox" class="history-checkbox" data-id="${doc._id}">
+            </div>
+            <div class="history-item-info">
+                <div class="history-item-icon">
+                    <i data-lucide="${getHistoryFileIcon(doc.name)}" style="width: 24px; height: 24px;"></i>
+                </div>
+                <div class="history-item-details">
+                    <div class="history-item-name" title="${doc.name}">${doc.name}</div>
+                    <div class="history-item-meta">
+                        <span>${formatFileSizeForHistory(doc.size)}</span>
+                        <span>${formatDate(doc.timestamp)}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="history-item-actions">
+                <button class="import-btn" data-id="${doc._id}" title="导入">
+                    <i data-lucide="import"></i>
+                </button>
+                <button class="delete-btn" data-id="${doc._id}" title="删除">
+                    <i data-lucide="trash-2"></i>
+                </button>
+            </div>
+        `;
+        historyList.appendChild(item);
+    });
+    
+    lucide.createIcons();
+    
+    // 绑定复选框事件
+    document.querySelectorAll('.history-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateSelectedCount);
+    });
+    
+    // 绑定导入按钮事件
+    document.querySelectorAll('.import-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const id = btn.dataset.id;
+            const doc = historyDocuments.find(d => d._id === id);
+            if (doc) {
+                await importFromHistory([doc]);
+            }
+        });
+    });
+    
+    // 绑定删除按钮事件
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const id = btn.dataset.id;
+            await deleteHistoryItem(id);
+        });
+    });
+}
+
+// 更新选中数量
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.history-checkbox:checked');
+    const selectedCountSpan = document.getElementById('selectedCount');
+    if (selectedCountSpan) {
+        selectedCountSpan.textContent = checkboxes.length;
+    }
+}
+
+// 获取选中的历史文档
+function getSelectedHistoryItems() {
+    const checkboxes = document.querySelectorAll('.history-checkbox:checked');
+    const selectedIds = Array.from(checkboxes).map(cb => cb.dataset.id);
+    return historyDocuments.filter(doc => selectedIds.includes(doc._id));
+}
+
+// 全选/取消全选
+function toggleSelectAll() {
+    const selectAllCheckbox = document.getElementById('selectAllHistory');
+    const checkboxes = document.querySelectorAll('.history-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = selectAllCheckbox.checked;
+    });
+    updateSelectedCount();
+}
+
+// 导入选中的文档
+async function importSelected() {
+    const selected = getSelectedHistoryItems();
+    if (selected.length === 0) {
+        alert('请先选择要导入的文档');
+        return;
+    }
+    await importFromHistory(selected);
+    // 清空复选框选中状态
+    document.querySelectorAll('.history-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
+    updateSelectedCount();
+    const selectAll = document.getElementById('selectAllHistory');
+    if (selectAll) selectAll.checked = false;
+}
+
+// 初始化历史文档模块
+async function initHistoryModule() {
+    await loadHistoryFromServer();
+    
+    // 绑定全局事件
+    const refreshBtn = document.getElementById('refreshHistoryBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => loadHistoryFromServer());
+    }
+    
+    const clearAllBtn = document.getElementById('clearAllHistoryBtn');
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', () => clearAllHistory());
+    }
+    
+    const selectAllCheckbox = document.getElementById('selectAllHistory');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', toggleSelectAll);
+    }
+    
+    const importBtn = document.getElementById('importSelectedBtn');
+    if (importBtn) {
+        importBtn.addEventListener('click', importSelected);
+    }
+}
+
+// ========== 历史文档侧边栏控制 ==========
+function openHistorySidebar() {
+    const sidebar = document.getElementById('historySidebar');
+    const overlay = document.getElementById('historyOverlay');
+    if (sidebar) sidebar.classList.add('open');
+    if (overlay) overlay.classList.add('open');
+    // 打开时刷新列表
+    loadHistoryFromServer();
+}
+
+function closeHistorySidebar() {
+    const sidebar = document.getElementById('historySidebar');
+    const overlay = document.getElementById('historyOverlay');
+    if (sidebar) sidebar.classList.remove('open');
+    if (overlay) overlay.classList.remove('open');
+}
+
+// 绑定侧边栏事件
+function bindHistoryEvents() {
+    const toggleBtn = document.getElementById('historyToggleBtn');
+    const closeBtn = document.getElementById('historySidebarClose');
+    const overlay = document.getElementById('historyOverlay');
+    const searchInput = document.getElementById('historySearchInput');
+    
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', openHistorySidebar);
+    }
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeHistorySidebar);
+    }
+    if (overlay) {
+        overlay.addEventListener('click', closeHistorySidebar);
+    }
+    if (searchInput) {
+        let debounceTimer;
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                const keyword = e.target.value.trim();
+                if (keyword) {
+                    searchHistory(keyword);
+                } else {
+                    loadHistoryFromServer();
+                }
+            }, 300);
+        });
+    }
+}
+
+// 删除选中的历史文档
+async function deleteSelectedHistory() {
+    const checkboxes = document.querySelectorAll('.history-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('请先选择要删除的文档');
+        return;
+    }
+    
+    if (!confirm(`确定要删除选中的 ${checkboxes.length} 个文档吗？`)) {
+        return;
+    }
+    
+    const ids = Array.from(checkboxes).map(cb => cb.dataset.id);
+    try {
+        const response = await fetch('/api/history/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: ids })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            await loadHistoryFromServer();
+            // 清空全选状态
+            const selectAll = document.getElementById('selectAllHistory');
+            if (selectAll) selectAll.checked = false;
+        }
+    } catch (error) {
+        console.error('删除失败:', error);
+        alert('删除失败: ' + error.message);
+    }
+}
+
+// 修改 renderHistoryList 函数，适配侧边栏
+function renderHistoryList() {
+    const historyList = document.getElementById('historyList');
+    const historyFooter = document.getElementById('historyFooter');
+    const historyBadge = document.getElementById('historyBadge');
+    const historyCount = document.getElementById('historyCount');
+    
+    if (!historyList) return;
+    
+    // 更新徽章数量
+    if (historyBadge) historyBadge.textContent = historyDocuments.length;
+    if (historyCount) historyCount.textContent = historyDocuments.length;
+    
+    if (historyDocuments.length === 0) {
+        historyList.innerHTML = `
+            <div class="history-empty">
+                <i data-lucide="archive"></i>
+                <p>暂无历史文档</p>
+                <small>上传文档后会自动保存</small>
+            </div>
+        `;
+        if (historyFooter) historyFooter.style.display = 'none';
+        lucide.createIcons();
+        return;
+    }
+    
+    if (historyFooter) historyFooter.style.display = 'flex';
+    
+    historyList.innerHTML = '';
+    historyDocuments.forEach(doc => {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.innerHTML = `
+            <div class="history-item-checkbox">
+                <input type="checkbox" class="history-checkbox" data-id="${doc._id}">
+            </div>
+            <div class="history-item-icon">
+                <i data-lucide="${getHistoryFileIcon(doc.name)}"></i>
+            </div>
+            <div class="history-item-info">
+                <div class="history-item-name" title="${doc.name}">${doc.name}</div>
+                <div class="history-item-meta">
+                    <span>${formatFileSizeForHistory(doc.size)}</span>
+                    <span>${formatDate(doc.timestamp)}</span>
+                </div>
+            </div>
+            <div class="history-item-actions">
+                <button class="import-single-btn" data-id="${doc._id}" title="导入">
+                    <i data-lucide="import"></i>
+                </button>
+                <button class="delete-single-btn" data-id="${doc._id}" title="删除">
+                    <i data-lucide="trash-2"></i>
+                </button>
+            </div>
+        `;
+        historyList.appendChild(item);
+    });
+    
+    lucide.createIcons();
+    
+    // 绑定复选框事件
+    document.querySelectorAll('.history-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateSelectedCount);
+    });
+    
+    // 绑定单个导入按钮
+    document.querySelectorAll('.import-single-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            const doc = historyDocuments.find(d => d._id === id);
+            if (doc) {
+                await importFromHistory([doc]);
+            }
+        });
+    });
+    
+    // 绑定单个删除按钮
+    document.querySelectorAll('.delete-single-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            await deleteHistoryItem(id);
+        });
+    });
+}
+
+// 更新选中数量
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.history-checkbox:checked');
+    const selectedCountSpan = document.getElementById('selectedCount');
+    if (selectedCountSpan) {
+        selectedCountSpan.textContent = checkboxes.length;
+    }
+}
+
+// 全选/取消全选
+function toggleSelectAll() {
+    const selectAllCheckbox = document.getElementById('selectAllHistory');
+    if (!selectAllCheckbox) return;
+    
+    const checkboxes = document.querySelectorAll('.history-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = selectAllCheckbox.checked;
+    });
+    updateSelectedCount();
+}
+
+// 导入选中的文档
+async function importSelected() {
+    const selected = getSelectedHistoryItems();
+    if (selected.length === 0) {
+        alert('请先选择要导入的文档');
+        return;
+    }
+    await importFromHistory(selected);
+    // 清空复选框选中状态
+    document.querySelectorAll('.history-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
+    updateSelectedCount();
+    const selectAll = document.getElementById('selectAllHistory');
+    if (selectAll) selectAll.checked = false;
+}
+
+// 初始化历史文档模块
+async function initHistoryModule() {
+    await loadHistoryFromServer();
+    bindHistoryEvents();
+    
+    // 绑定全选事件
+    const selectAllCheckbox = document.getElementById('selectAllHistory');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', toggleSelectAll);
+    }
+    
+    // 绑定导入选中按钮
+    const importBtn = document.getElementById('importSelectedBtn');
+    if (importBtn) {
+        importBtn.addEventListener('click', importSelected);
+    }
+    
+    // 绑定删除选中按钮
+    const deleteBtn = document.getElementById('deleteSelectedBtn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', deleteSelectedHistory);
+    }
+}
 // 页面跳转
 document.addEventListener('DOMContentLoaded', () => {
-    // 返回首页 - 使用正确的路由
     const backHomeBtn = document.getElementById('backHomeBtn');
     if (backHomeBtn) {
         backHomeBtn.addEventListener('click', () => {
@@ -13,14 +595,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // 初始化文件管理器
     initFileManager();
-    
-    // 绑定功能卡片点击事件
+    initHistoryModule();  // 新增
     bindFunctionCards();
 });
 
-// 初始化文件管理器
+// 文件管理器初始化
 function initFileManager() {
     currentFileManager = new FileManager();
     currentFileManager.init({
@@ -29,6 +609,20 @@ function initFileManager() {
         listBodyId: 'globalFileListBody',
         countSpanId: 'globalFileCount',
         onChange: (files) => {
+            // 如果是历史导入操作，跳过自动保存
+            if (isImportingFromHistory) {
+                console.log('跳过历史导入文件的自动保存');
+                if (currentFunction && files.length > 0) {
+                    loadFunctionUI(currentFunction);
+                }
+                return;
+            }
+            
+            // 正常上传：自动保存到历史记录
+            files.forEach(file => {
+                addToHistory(file);
+            });
+            
             if (currentFunction && files.length > 0) {
                 loadFunctionUI(currentFunction);
             } else if (files.length === 0) {
@@ -44,7 +638,6 @@ function initFileManager() {
     });
     currentFileManager.setupDragDrop('workspaceDropArea');
 }
-
 // 覆盖 FileManager 的 render 方法，使用 Lucide 线性图标
 function overrideFileManagerRender() {
     if (!currentFileManager) return;
