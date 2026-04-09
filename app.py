@@ -12,6 +12,7 @@ from db_manager import DatabaseManager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 from instruction_parser import InstructionOperator
+import json
 
 DEEPSEEK_API_KEY = "sk-4cbb2ea6e387462383eaeefdbcaa3314"
 instruction_operator = InstructionOperator(api_key=DEEPSEEK_API_KEY)
@@ -1201,6 +1202,108 @@ def fill_word_from_excel(template_path, excel_path, output_path):
     doc.save(output_path)
     logger.info(f"✅ Word 文件已生成（动态版本）：{output_path}")
     return output_path
+
+@app.route('/api/analyze', methods=['POST'])
+def api_analyze():
+    """文档深度分析"""
+    try:
+        files = request.files.getlist('documents')
+        analyze_types = json.loads(request.form.get('analyze_types', '[]'))
+        
+        if not files:
+            return jsonify({'error': '请上传文档'}), 400
+        
+        all_text = ""
+        for file in files:
+            filename = secure_filename(file.filename)
+            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(path)
+            all_text += f"\n--- {filename} ---\n{reader.read(path)}\n"
+            os.remove(path)
+        
+        result = {}
+        
+        # 调用 AI 进行各项分析
+        if 'summary' in analyze_types:
+            result['summary'] = generate_summary(all_text)
+        if 'keywords' in analyze_types:
+            result['keywords'] = extract_keywords(all_text)
+        if 'stats' in analyze_types:
+            result['stats'] = get_text_stats(all_text)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"分析失败: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def generate_summary(text):
+    """生成文档摘要"""
+    prompt = f"""请为以下文档生成一个简洁的摘要（150字以内），直接返回摘要文本，不要用JSON格式，不要加引号：
+
+文档内容：
+{text[:3000]}
+
+摘要："""
+    try:
+        response = ai_module.call_model(prompt, max_tokens=200)
+        # 清理可能的引号和JSON格式
+        response = response.strip()
+        if response.startswith('"') and response.endswith('"'):
+            response = response[1:-1]
+        if response.startswith("'") and response.endswith("'"):
+            response = response[1:-1]
+        # 移除可能的JSON标记
+        response = re.sub(r'^```json\s*', '', response)
+        response = re.sub(r'\s*```$', '', response)
+        return response
+    except Exception as e:
+        logger.error(f"生成摘要失败: {e}")
+        return "无法生成摘要"
+
+def extract_keywords(text):
+    """提取关键词"""
+    prompt = f"""请从以下文档中提取5-10个最重要的关键词，用中文逗号分隔，直接返回关键词列表，不要用JSON格式，不要加引号，不要用方括号。
+
+示例输出：人工智能,机器学习,深度学习,神经网络
+
+文档内容：
+{text[:3000]}
+
+关键词："""
+    try:
+        response = ai_module.call_model(prompt, max_tokens=150)
+        # 清理响应
+        response = response.strip()
+        # 移除可能的JSON格式
+        response = re.sub(r'^\[|\]$', '', response)
+        response = re.sub(r'^```json\s*', '', response)
+        response = re.sub(r'\s*```$', '', response)
+        response = response.replace('"', '').replace("'", "")
+        
+        # 分割成列表
+        keywords = [k.strip() for k in re.split(r'[，,、\s]+', response) if k.strip()]
+        return keywords[:10]
+    except Exception as e:
+        logger.error(f"提取关键词失败: {e}")
+        return ["文档分析", "关键词提取"]
+def get_text_stats(text):
+    """统计信息"""
+    import re
+    char_count = len(text)
+    # 中文字符 + 英文单词
+    chinese_chars = len(re.findall(r'[\u4e00-\u9fa5]', text))
+    english_words = len(re.findall(r'[a-zA-Z]+', text))
+    word_count = chinese_chars + english_words
+    paragraph_count = len([p for p in text.split('\n') if p.strip()])
+    reading_time = max(1, round(word_count / 300))
+    return {
+        'char_count': char_count,
+        'word_count': word_count,
+        'paragraph_count': paragraph_count,
+        'reading_time': reading_time
+    }
+
 
 
 if __name__ == '__main__':

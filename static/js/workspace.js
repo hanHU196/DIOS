@@ -721,7 +721,8 @@ function loadFunctionUI(func) {
         fill: '表格智能填写',
         format: '文档格式调整',
         qa: '智能问答',
-        graph: '知识图谱'
+        graph: '知识图谱',
+        analyze: '文档深度分析'  // 新增
     };
     resultTitle.innerHTML = `<i data-lucide="${getTitleIcon(func)}" style="width: 18px; height: 18px; margin-right: 6px;"></i> ${titles[func] || '执行结果'}`;
     lucide.createIcons();
@@ -740,6 +741,7 @@ function loadFunctionUI(func) {
         case 'format': renderFormatUI(resultContent); break;
         case 'qa': renderQaUI(resultContent); break;
         case 'graph': renderGraphUI(resultContent); break;
+        case 'analyze': renderAnalyzeUI(resultContent); break;  // 新增
     }
 }
 
@@ -749,7 +751,8 @@ function getTitleIcon(func) {
         fill: 'table',
         format: 'paintbrush',
         qa: 'message-circle',
-        graph: 'network'
+        graph: 'network',
+        analyze: 'bar-chart-3'
     };
     return icons[func] || 'file-text';
 }
@@ -1727,255 +1730,6 @@ function renderQaUI(container) {
     });
 }
 
-// 知识图谱 UI（美化版）
-function renderGraphUI(container) {
-    container.innerHTML = `
-        <div class="graph-container">
-            <div class="graph-canvas" id="graphCanvas"></div>
-            <div class="graph-detail" id="graphDetail">
-                <div style="text-align: center; color: var(--text-placeholder); padding: 40px;">
-                    <i data-lucide="loader" style="width: 32px; height: 32px; animation: spin 1s linear infinite;"></i><br>
-                    正在生成知识图谱...
-                </div>
-            </div>
-        </div>
-        <div class="graph-toolbar" style="margin-top: 16px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-            <button class="graph-tool-btn" id="graphResetView" title="重置视图">
-                <i data-lucide="maximize" style="width: 16px; height: 16px;"></i> 重置视图
-            </button>
-            <button class="graph-tool-btn" id="graphFitView" title="适应屏幕">
-                <i data-lucide="zoom-in" style="width: 16px; height: 16px;"></i> 适应屏幕
-            </button>
-            <button class="graph-tool-btn" id="graphExport" title="导出图片">
-                <i data-lucide="camera" style="width: 16px; height: 16px;"></i> 导出图片
-            </button>
-        </div>
-    `;
-    
-    // 添加加载动画样式
-    if (!document.querySelector('#graphSpinStyle')) {
-        const style = document.createElement('style');
-        style.id = 'graphSpinStyle';
-        style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
-        document.head.appendChild(style);
-    }
-    
-    lucide.createIcons();
-    
-    // 绑定工具栏按钮事件
-    setTimeout(() => {
-        document.getElementById('graphResetView')?.addEventListener('click', () => {
-            if (currentChart) currentChart.dispatchAction({ type: 'restore' });
-        });
-        document.getElementById('graphFitView')?.addEventListener('click', () => {
-            if (currentChart) currentChart.dispatchAction({ type: 'graphRoam', roam: 'scale' });
-        });
-        document.getElementById('graphExport')?.addEventListener('click', () => {
-            if (currentChart) {
-                const url = currentChart.getDataURL({ type: 'png' });
-                const link = document.createElement('a');
-                link.download = 'knowledge-graph.png';
-                link.href = url;
-                link.click();
-            }
-        });
-    }, 100);
-    
-    const loadGraph = async () => {
-        const files = currentFileManager.getFiles();
-        if (files.length === 0) {
-            document.getElementById('graphDetail').innerHTML = `
-                <div style="text-align: center; color: var(--warning); padding: 40px;">
-                    <i data-lucide="alert-triangle" style="width: 32px; height: 32px;"></i><br>
-                    请先上传文档
-                </div>
-            `;
-            lucide.createIcons();
-            return;
-        }
-        
-        const formData = new FormData();
-        for (const file of files) {
-            formData.append('documents', file);
-        }
-        
-        try {
-            const response = await fetch('/api/graph', {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || '图谱生成失败');
-            }
-            
-            const data = await response.json();
-            
-            if (!data.nodes || data.nodes.length === 0) {
-                throw new Error('未能提取到有效的实体关系');
-            }
-            
-            const canvas = document.getElementById('graphCanvas');
-            if (canvas && typeof echarts !== 'undefined') {
-                if (currentChart) currentChart.dispose();
-                currentChart = echarts.init(canvas);
-                
-                const isDark = document.documentElement.classList.contains('dark');
-                
-                const categoryColors = [
-                    { light: '#5470c6', dark: '#6E8BC0' },
-                    { light: '#fac858', dark: '#F4C542' },
-                    { light: '#ee6666', dark: '#E87676' },
-                    { light: '#73c0de', dark: '#8FC8E8' },
-                    { light: '#3ba272', dark: '#5DB98A' },
-                    { light: '#fc8452', dark: '#FCA374' },
-                    { light: '#9a60b4', dark: '#B885D0' },
-                    { light: '#ea7ccc', dark: '#EE9AD4' }
-                ];
-                
-                const nodes = data.nodes.map((node, idx) => {
-                    const catIdx = node.category || 0;
-                    const colors = categoryColors[catIdx % categoryColors.length];
-                    return {
-                        ...node,
-                        symbolSize: node.symbolSize || 45,
-                        itemStyle: {
-                            color: isDark ? colors.dark : colors.light,
-                            borderColor: isDark ? '#ffffff' : '#ffffff',
-                            borderWidth: 2,
-                            shadowBlur: 10,
-                            shadowColor: 'rgba(0,0,0,0.3)'
-                        },
-                        label: {
-                            show: true,
-                            fontSize: 12,
-                            fontWeight: '500',
-                            color: isDark ? '#EFF3F8' : '#1A2C3E',
-                            offset: [8, 0]
-                        }
-                    };
-                });
-                
-                const links = data.links.map(link => ({
-                    ...link,
-                    lineStyle: {
-                        color: isDark ? '#4A5A72' : '#CBD5E1',
-                        width: 2,
-                        curveness: 0.3,
-                        type: 'solid',
-                        opacity: 0.7
-                    },
-                    label: {
-                        show: true,
-                        fontSize: 10,
-                        color: isDark ? '#9CA3AF' : '#6B7280',
-                        backgroundColor: isDark ? 'rgba(17,22,31,0.8)' : 'rgba(255,255,255,0.8)',
-                        padding: [2, 5, 2, 5],
-                        borderRadius: 4,
-                        offset: [0, -10]
-                    },
-                    emphasis: {
-                        lineStyle: {
-                            width: 3,
-                            color: isDark ? '#819BBB' : '#2C3E66',
-                            opacity: 1
-                        }
-                    }
-                }));
-                
-                const categories = (data.categories || []).map((cat, idx) => {
-                    const colors = categoryColors[idx % categoryColors.length];
-                    return {
-                        name: cat.name,
-                        itemStyle: {
-                            color: isDark ? colors.dark : colors.light
-                        }
-                    };
-                });
-                
-                currentChart.setOption({
-                    title: {
-                        text: '文档实体关系图谱',
-                        left: 'center',
-                        top: 5,
-                        textStyle: {
-                            color: isDark ? '#EFF3F8' : '#1A2C3E',
-                            fontSize: 14,
-                            fontWeight: '600'
-                        }
-                    },
-                    tooltip: { trigger: 'item' },
-                    series: [{
-                        type: 'graph',
-                        layout: 'force',
-                        force: { repulsion: 500, edgeLength: 150, gravity: 0.1, layoutAnimation: true },
-                        roam: true,
-                        draggable: true,
-                        edgeSymbol: ['none', 'arrow'],
-                        edgeSymbolSize: [0, 8],
-                        label: {
-                            show: true,
-                            position: 'right',
-                            fontSize: 11,
-                            offset: [5, 0],
-                            color: isDark ? '#EFF3F8' : '#1A2C3E',
-                            fontWeight: '500'
-                        },
-                        edgeLabel: {
-                            show: true,
-                            fontSize: 10,
-                            position: 'middle',
-                            formatter: (params) => params.data.name || '',
-                            color: isDark ? '#9CA3AF' : '#6B7280',
-                            backgroundColor: isDark ? 'rgba(17,22,31,0.7)' : 'rgba(255,255,255,0.7)',
-                            padding: [2, 6, 2, 6],
-                            borderRadius: 12
-                        },
-                        data: nodes,
-                        links: links,
-                        categories: categories,
-                        lineStyle: { color: isDark ? '#4A5A72' : '#CBD5E1', width: 2, curveness: 0.3, opacity: 0.6 },
-                        emphasis: { scale: true, focus: 'adjacency', lineStyle: { width: 3, color: isDark ? '#819BBB' : '#2C3E66', opacity: 1 } },
-                        animation: true,
-                        animationDuration: 800
-                    }]
-                });
-                
-                currentChart.on('click', (params) => {
-                    if (params.dataType === 'node') {
-                        const node = params.data;
-                        const categoryName = categories[node.category]?.name || '实体';
-                        document.getElementById('graphDetail').innerHTML = `
-                            <div style="display: flex; flex-direction: column; gap: 12px;">
-                                <div style="border-bottom: 1px solid var(--border-light); padding-bottom: 10px;">
-                                    <h3 style="margin: 0; font-size: 1rem;"><i data-lucide="star" style="width: 16px; height: 16px;"></i> ${node.name}</h3>
-                                </div>
-                                <div><strong>类型：</strong> ${categoryName}</div>
-                                <div><strong>重要性：</strong> ${node.symbolSize || 40}</div>
-                                <div><strong>来源文档：</strong> ${files.map(f => f.name).join(', ')}</div>
-                            </div>
-                        `;
-                        lucide.createIcons();
-                    }
-                });
-            }
-            
-        } catch (error) {
-            console.error('图谱加载失败:', error);
-            document.getElementById('graphDetail').innerHTML = `
-                <div style="text-align: center; color: var(--danger); padding: 40px;">
-                    <i data-lucide="x-circle" style="width: 32px; height: 32px;"></i><br>
-                    ${error.message}<br>
-                    <small style="color: var(--text-placeholder);">请检查文档内容或稍后重试</small>
-                </div>
-            `;
-            lucide.createIcons();
-        }
-    };
-    
-    setTimeout(loadGraph, 200);
-}
 // 进度条管理类（美化版）
 class ProgressManager {
     constructor(containerId, options = {}) {
@@ -2115,4 +1869,516 @@ class ProgressManager {
         
         setTimeout(() => this.hide(), 3000);
     }
+}
+
+// 文档分析 UI（含企业版入口）- 保持原结果展示
+function renderAnalyzeUI(container) {
+    const files = currentFileManager.getFiles();
+    const isMultiple = files.length > 1;
+    
+    container.innerHTML = `
+        <div class="analyze-container">
+            <!-- 普通分析（免费） -->
+            <div class="analyze-section free-section">
+                <div class="analyze-section-header">
+                    <span>基础分析</span>
+                </div>
+                <div class="analyze-type-grid">
+                    <label class="analyze-type-option">
+                        <input type="checkbox" name="analyzeType" value="summary" checked>
+                        <i data-lucide="file-text"></i>
+                        <span>文档摘要</span>
+                    </label>
+                    <label class="analyze-type-option">
+                        <input type="checkbox" name="analyzeType" value="keywords" checked>
+                        <i data-lucide="hash"></i>
+                        <span>关键词提取</span>
+                    </label>
+                    <label class="analyze-type-option">
+                        <input type="checkbox" name="analyzeType" value="stats">
+                        <i data-lucide="bar-chart-2"></i>
+                        <span>统计信息</span>
+                    </label>
+                </div>
+                ${isMultiple ? `
+                <div class="single-doc-hint">
+                    <span>当前选择了 ${files.length} 个文档，基础分析仅分析第一个文档。如需多文档对比分析，请升级企业版。</span>
+                </div>
+                ` : ''}
+            </div>
+            
+            <!-- 企业版功能（展示但锁定） -->
+            <div class="analyze-section enterprise-section">
+                <div class="analyze-section-header">
+                    <span class="enterprise-badge">企业版</span>
+                    <span>商业智能分析</span>
+                </div>
+                <div class="enterprise-features">
+                    <div class="feature-item locked" data-feature="contract">
+                        <i data-lucide="file-text"></i>
+                        <div class="feature-info">
+                            <div class="feature-name">合同智能审阅</div>
+                            <div class="feature-desc">自动识别风险条款、缺失条款、违约责任</div>
+                        </div>
+                        <span class="lock-badge"><i data-lucide="lock" style="width: 12px; height: 12px;"></i> </span>
+                    </div>
+                    <div class="feature-item locked" data-feature="bid">
+                        <i data-lucide="trophy"></i>
+                        <div class="feature-info">
+                            <div class="feature-name">投标文件分析</div>
+                            <div class="feature-desc">完整性检查、评分要点提取、报价分析</div>
+                        </div>
+                        <span class="lock-badge"><i data-lucide="lock" style="width: 12px; height: 12px;"></i> </span>
+                    </div>
+                    <div class="feature-item locked" data-feature="financial">
+                        <i data-lucide="trending-up"></i>
+                        <div class="feature-info">
+                            <div class="feature-name">财报/研报分析</div>
+                            <div class="feature-desc">财务指标提取、趋势分析、投资亮点</div>
+                        </div>
+                        <span class="lock-badge"><i data-lucide="lock" style="width: 12px; height: 12px;"></i> </span>
+                    </div>
+                    <div class="feature-item locked" data-feature="policy">
+                        <i data-lucide="scroll"></i>
+                        <div class="feature-info">
+                            <div class="feature-name">政策文件解读</div>
+                            <div class="feature-desc">政策要点提取、适用条件判断、申报指南</div>
+                        </div>
+                        <span class="lock-badge"><i data-lucide="lock" style="width: 12px; height: 12px;"></i> </span>
+                    </div>
+                    <div class="feature-item locked" data-feature="risk">
+                        <i data-lucide="alert-triangle"></i>
+                        <div class="feature-info">
+                            <div class="feature-name">风险识别</div>
+                            <div class="feature-desc">多维度风险检测、合规性检查</div>
+                        </div>
+                        <span class="lock-badge"><i data-lucide="lock" style="width: 12px; height: 12px;"></i> </span>
+                    </div>
+                    <div class="feature-item locked" data-feature="batch">
+                        <i data-lucide="layers"></i>
+                        <div class="feature-info">
+                            <div class="feature-name">批量分析</div>
+                            <div class="feature-desc">同时分析多个文档，生成对比报告</div>
+                        </div>
+                        <span class="lock-badge"><i data-lucide="lock" style="width: 12px; height: 12px;"></i> </span>
+                    </div>
+                </div>
+                
+                <!-- 升级提示 -->
+                <div class="upgrade-prompt">
+                    <i data-lucide="crown"></i>
+                    <div class="upgrade-text">
+                        <strong>解锁全部商业智能功能</strong>
+                        <span>升级到企业版，获得合同审阅、风险识别、批量分析等高级功能</span>
+                    </div>
+                    <button class="upgrade-btn" id="upgradeToEnterprise">
+                        了解企业版 <i data-lucide="arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+            <!-- 分析按钮 -->
+            <button class="btn-primary" id="executeAnalyze">
+                开始分析
+            </button>
+            
+            <div id="analyzeProgressArea" style="margin-top: 20px;"></div>
+            <div id="analyzeResultArea" style="margin-top: 20px;"></div>
+            <div id="analyzeError" class="error-message hidden"></div>
+        </div>
+    `;
+    
+    lucide.createIcons();
+    
+    // 企业版功能点击提示
+    document.querySelectorAll('.feature-item.locked').forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showEnterpriseModal(item.querySelector('.feature-name')?.textContent || '该功能');
+        });
+    });
+    
+    // 升级按钮
+    const upgradeBtn = document.getElementById('upgradeToEnterprise');
+    if (upgradeBtn) {
+        upgradeBtn.addEventListener('click', () => {
+            showEnterpriseModal();
+        });
+    }
+    
+    // 显示企业版弹窗
+    function showEnterpriseModal(featureName = '') {
+        const modal = document.createElement('div');
+        modal.className = 'enterprise-modal';
+        modal.innerHTML = `
+            <div class="enterprise-modal-overlay"></div>
+            <div class="enterprise-modal-content">
+                <div class="enterprise-modal-header">
+                    <i data-lucide="crown"></i>
+                    <h3>解锁企业版功能</h3>
+                    <button class="modal-close"><i data-lucide="x"></i></button>
+                </div>
+                <div class="enterprise-modal-body">
+                    ${featureName ? `<p class="feature-highlight">「${featureName}」</p>` : ''}
+                    <p>该功能仅限企业版用户使用。</p>
+                    <div class="enterprise-benefits">
+                        <div class="benefit-item">
+                            <i data-lucide="check-circle"></i>
+                            <span>合同智能审阅 - 自动识别风险条款</span>
+                        </div>
+                        <div class="benefit-item">
+                            <i data-lucide="check-circle"></i>
+                            <span>投标文件分析 - 完整性检查、评分提取</span>
+                        </div>
+                        <div class="benefit-item">
+                            <i data-lucide="check-circle"></i>
+                            <span>财报/研报分析 - 财务指标提取</span>
+                        </div>
+                        <div class="benefit-item">
+                            <i data-lucide="check-circle"></i>
+                            <span>批量文档处理 - 同时分析多个文档</span>
+                        </div>
+                        <div class="benefit-item">
+                            <i data-lucide="check-circle"></i>
+                            <span>API 接口调用 - 集成到您的系统</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="enterprise-modal-footer">
+                    <button class="btn-secondary" id="modalCloseBtn">暂不考虑</button>
+                    <button class="btn-primary" id="modalContactBtn">联系销售</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        lucide.createIcons();
+        
+        modal.querySelector('.enterprise-modal-overlay').addEventListener('click', () => modal.remove());
+        modal.querySelector('.modal-close').addEventListener('click', () => modal.remove());
+        modal.querySelector('#modalCloseBtn').addEventListener('click', () => modal.remove());
+        modal.querySelector('#modalContactBtn').addEventListener('click', () => {
+            alert('感谢您的关注！我们的销售团队会尽快与您联系。\n\n演示模式：实际项目中会跳转到联系页面。');
+            modal.remove();
+        });
+    }
+    
+    // 进度条函数
+    function updateProgress(percent, status, detail) {
+        const progressArea = document.getElementById('analyzeProgressArea');
+        if (!progressArea) return;
+        if (percent === 0) {
+            progressArea.innerHTML = '';
+            return;
+        }
+        progressArea.innerHTML = `
+            <div class="progress-container loading">
+                <div class="progress-header">
+                    <div class="progress-title">
+                        <i data-lucide="loader"></i>
+                        <span>文档分析中</span>
+                    </div>
+                    <div class="progress-stats">
+                        <span class="progress-percent">${percent}%</span>
+                    </div>
+                </div>
+                <div class="progress-bar-wrapper">
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" style="width: ${percent}%"></div>
+                    </div>
+                </div>
+                <div class="progress-details">
+                    <div class="progress-status">${status}</div>
+                    <div class="progress-step">${detail}</div>
+                </div>
+            </div>
+        `;
+        lucide.createIcons();
+    }
+    
+    // 执行分析（只分析第一个文档，保持原结果展示）
+    const analyzeBtn = document.getElementById('executeAnalyze');
+    if (analyzeBtn) {
+        const newAnalyzeBtn = analyzeBtn.cloneNode(true);
+        analyzeBtn.parentNode.replaceChild(newAnalyzeBtn, analyzeBtn);
+        newAnalyzeBtn.addEventListener('click', async () => {
+            const files = currentFileManager.getFiles();
+            if (files.length === 0) {
+                Utils.showError('analyzeError', '请先上传文档');
+                return;
+            }
+            
+            // 获取选中的分析类型
+            const analyzeTypes = [];
+            document.querySelectorAll('input[name="analyzeType"]:checked').forEach(cb => {
+                analyzeTypes.push(cb.value);
+            });
+            
+            if (analyzeTypes.length === 0) {
+                Utils.showError('analyzeError', '请至少选择一种分析类型');
+                return;
+            }
+            
+            const resultArea = document.getElementById('analyzeResultArea');
+            resultArea.innerHTML = '';
+            
+            // 基础分析：只取第一个文档
+            const targetFile = files[0];
+            
+            updateProgress(20, '正在上传文档', `分析文档: ${targetFile.name}`);
+            
+            const formData = new FormData();
+            formData.append('documents', targetFile);
+            formData.append('analyze_types', JSON.stringify(analyzeTypes));
+            
+            try {
+                updateProgress(50, 'AI 分析中', '正在处理文档内容...');
+                
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '分析失败');
+                }
+                
+                updateProgress(100, '分析完成', '结果已生成');
+                
+                const data = await response.json();
+                
+                setTimeout(() => {
+                    updateProgress(0, '', '');
+                    // 使用原来的 renderAnalyzeResult 函数
+                    renderAnalyzeResult(data, [targetFile], analyzeTypes, resultArea);
+                }, 500);
+                
+            } catch (error) {
+                updateProgress(0, '', '');
+                Utils.showError('analyzeError', error.message);
+            }
+        });
+    }
+}
+
+// 渲染分析结果
+function renderAnalyzeResult(data, files, analyzeTypes, container) {
+    let html = `
+        <div class="analyze-result-container">
+            <div class="analyze-result-header">
+                <span>分析完成！共分析 ${files.length} 个文档</span>
+            </div>
+            <div class="analyze-result-tabs">
+                ${analyzeTypes.map(type => `
+                    <button class="analyze-tab ${type === analyzeTypes[0] ? 'active' : ''}" data-tab="${type}">
+                        ${getAnalyzeTabIcon(type)} ${getAnalyzeTabName(type)}
+                    </button>
+                `).join('')}
+            </div>
+            <div class="analyze-result-content">
+                ${analyzeTypes.map(type => `
+                    <div id="analyze-tab-${type}" class="analyze-tab-content ${type === analyzeTypes[0] ? 'active' : ''}">
+                        ${renderAnalyzeTabContent(data, type)}
+                    </div>
+                `).join('')}
+            </div>
+            <div class="analyze-result-footer">
+                <button class="btn-secondary" id="exportAnalyzeResult">
+                    <i data-lucide="download"></i> 导出分析报告
+                </button>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    lucide.createIcons();
+    
+    // 标签切换
+    document.querySelectorAll('.analyze-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tabId = tab.dataset.tab;
+            document.querySelectorAll('.analyze-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            document.querySelectorAll('.analyze-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`analyze-tab-${tabId}`).classList.add('active');
+        });
+    });
+    
+    // 导出结果
+    document.getElementById('exportAnalyzeResult')?.addEventListener('click', () => {
+        const report = {
+            files: files.map(f => f.name),
+            analyze_time: new Date().toISOString(),
+            results: data
+        };
+        const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `document_analysis_${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+}
+
+function getAnalyzeTabIcon(type) {
+    const icons = {
+        summary: '<i data-lucide="file-text"></i>',
+        keywords: '<i data-lucide="hash"></i>',
+        entities: '<i data-lucide="users"></i>',
+        sentiment: '<i data-lucide="smile"></i>',
+        topics: '<i data-lucide="layers"></i>',
+        stats: '<i data-lucide="bar-chart-2"></i>'
+    };
+    return icons[type] || '<i data-lucide="circle"></i>';
+}
+
+function getAnalyzeTabName(type) {
+    const names = {
+        summary: '文档摘要',
+        keywords: '关键词',
+        entities: '实体识别',
+        sentiment: '情感分析',
+        topics: '主题分类',
+        stats: '统计信息'
+    };
+    return names[type] || type;
+}
+
+function renderAnalyzeTabContent(data, type) {
+    switch(type) {
+        case 'summary':
+            const summary = data.summary || '暂无摘要信息';
+            // 清理可能的JSON格式
+            const cleanSummary = String(summary).replace(/^"|"$/g, '').replace(/\\n/g, '\n');
+            return `
+                <div class="analyze-summary">
+                    <div class="summary-item">
+                        <div class="summary-label">核心摘要</div>
+                        <div class="summary-text">${escapeHtml(cleanSummary)}</div>
+                    </div>
+                </div>
+            `;
+            
+        case 'keywords':
+            let keywords = data.keywords || [];
+            // 如果返回的是字符串，转换为数组
+            if (typeof keywords === 'string') {
+                keywords = keywords.split(/[，,、\s]+/).filter(k => k.trim());
+            }
+            if (!Array.isArray(keywords)) {
+                keywords = [];
+            }
+            return `
+                <div class="analyze-keywords">
+                    <div class="keyword-cloud">
+                        ${keywords.map(k => `
+                            <span class="keyword-tag">${escapeHtml(k)}</span>
+                        `).join('')}
+                        ${keywords.length === 0 ? '<div class="empty-result">未提取到关键词</div>' : ''}
+                    </div>
+                </div>
+            `;
+            
+        case 'entities':
+            let entities = data.entities || {};
+            if (typeof entities === 'string') {
+                entities = { "实体": entities.split(/[，,、\s]+/) };
+            }
+            return `
+                <div class="analyze-entities">
+                    ${Object.entries(entities).map(([type, items]) => {
+                        let itemArray = Array.isArray(items) ? items : [items];
+                        return `
+                            <div class="entity-group">
+                                <div class="entity-type">${escapeHtml(type)}</div>
+                                <div class="entity-list">
+                                    ${itemArray.map(item => `<span class="entity-item">${escapeHtml(item)}</span>`).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                    ${Object.keys(entities).length === 0 ? '<div class="empty-result">未识别到实体</div>' : ''}
+                </div>
+            `;
+            
+        case 'sentiment':
+            const sentiment = data.sentiment || { label: '中性', score: 0 };
+            const label = sentiment.label || '中性';
+            const score = sentiment.score || 0;
+            return `
+                <div class="analyze-sentiment">
+                    <div class="sentiment-score">
+                        <div class="sentiment-label">情感倾向</div>
+                        <div class="sentiment-value ${label === '积极' ? 'positive' : label === '消极' ? 'negative' : 'neutral'}">
+                            ${label}
+                        </div>
+                        <div class="sentiment-bar">
+                            <div class="sentiment-fill" style="width: ${(score + 1) * 50}%"></div>
+                        </div>
+                        <div class="sentiment-detail">置信度: ${Math.abs(score).toFixed(2)}</div>
+                    </div>
+                </div>
+            `;
+            
+        case 'topics':
+            let topics = data.topics || [];
+            if (!Array.isArray(topics)) {
+                topics = [];
+            }
+            return `
+                <div class="analyze-topics">
+                    ${topics.map(t => `
+                        <div class="topic-item">
+                            <div class="topic-name">${escapeHtml(t.name || '未知')}</div>
+                            <div class="topic-confidence">${Math.round((t.confidence || 0.8) * 100)}%</div>
+                            <div class="topic-bar">
+                                <div class="topic-fill" style="width: ${(t.confidence || 0.8) * 100}%"></div>
+                            </div>
+                        </div>
+                    `).join('')}
+                    ${topics.length === 0 ? '<div class="empty-result">未识别到主题</div>' : ''}
+                </div>
+            `;
+            
+        case 'stats':
+            const stats = data.stats || {};
+            return `
+                <div class="analyze-stats">
+                    <div class="stat-grid">
+                        <div class="stat-card">
+                            <div class="stat-value">${stats.char_count || 0}</div>
+                            <div class="stat-label">字符数</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${stats.word_count || 0}</div>
+                            <div class="stat-label">词数</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${stats.paragraph_count || 0}</div>
+                            <div class="stat-label">段落数</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${stats.reading_time || 0}</div>
+                            <div class="stat-label">阅读时长(分钟)</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+        default:
+            return '<div class="empty-result">暂无数据</div>';
+    }
+}
+
+// HTML 转义函数
+function escapeHtml(text) {
+    if (!text) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
