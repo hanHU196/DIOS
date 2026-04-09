@@ -1,0 +1,245 @@
+/* ========== 设计系统变量 ========== */
+:root {
+    --bg-base: #FFFFFF;
+    --bg-subtle: #F9FAFB;
+    --surface-card: #FFFFFF;
+    --border-light: #EDF2F7;
+    --border-focus: #CBD5E1;
+    --text-primary: #1A2C3E;
+    --text-secondary: #5B6E8C;
+    --text-placeholder: #9AA9BF;
+    --accent-solid: #2C3E66;
+    --accent-hover: #1F2F4D;
+    --accent-soft: #F1F4F9;
+    --accent-light: #E8EEF6;
+    --danger: #E53E3E;
+    --success: #10B981;
+    --warning: #F59E0B;
+    --gradient-start: #2C3E66;
+    --gradient-end: #4A6A8A;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.03);
+    --shadow-md: 0 12px 24px -12px rgba(0, 0, 0, 0.08), 0 4px 8px -4px rgba(0, 0, 0, 0.02);
+    --shadow-lg: 0 20px 32px -12px rgba(0, 0, 0, 0.12);
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-xl: 20px;
+    --radius-2xl: 32px;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --transition: all 0.3s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+}
+
+.dark {
+    --bg-base: #11161F;
+    --bg-subtle: #151E2A;
+    --surface-card: #1A232F;
+    --border-light: #2A3442;
+    --border-focus: #4A5A72;
+    --text-primary: #EFF3F8;
+    --text-secondary: #A3B3CC;
+    --text-placeholder: #65748C;
+    --accent-solid: #6A85B0;
+    --accent-hover: #819BBB;
+    --accent-soft: #232E3C;
+    --accent-light: #1E2A3A;
+    --gradient-start: #6A85B0;
+    --gradient-end: #8BA3C8;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 12px 24px -12px rgba(0, 0, 0, 0.4);
+}
+
+/* ========== 全局重置 ========== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.3s ease, color 0.2s ease;
+}
+
+/* ========== 导航栏公共样式 ========== */
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: rgba(var(--bg-base-rgb, 255,255,255), 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-light);
+    z-index: 1000;
+    padding: 0 32px;
+}
+
+.dark .navbar {
+    background-color: rgba(17, 22, 31, 0.95);
+}
+
+.nav-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 70px;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.logo span {
+    font-weight: 500;
+    color: var(--accent-solid);
+}
+
+/* ========== 按钮样式 ========== */
+.btn-primary {
+    background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+    border: none;
+    padding: 8px 24px;
+    border-radius: 40px;
+    cursor: pointer;
+    transition: var(--transition);
+    color: white;
+    font-weight: 500;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border-focus);
+    padding: 8px 20px;
+    border-radius: 40px;
+    cursor: pointer;
+    transition: var(--transition);
+    color: var(--text-secondary);
+    font-weight: 480;
+}
+
+.btn-outline:hover {
+    border-color: var(--accent-solid);
+    color: var(--accent-solid);
+}
+
+.btn-secondary {
+    background: var(--accent-soft);
+    border: none;
+    padding: 8px 20px;
+    border-radius: 40px;
+    cursor: pointer;
+    transition: var(--transition);
+    color: var(--text-primary);
+}
+
+.btn-large {
+    padding: 14px 36px;
+    font-size: 1rem;
+}
+
+.theme-toggle {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: var(--transition);
+}
+
+.theme-toggle:hover {
+    background-color: var(--accent-soft);
+    color: var(--text-primary);
+}
+
+/* ========== 工具类 ========== */
+.hidden {
+    display: none;
+}
+
+.error-message {
+    background: rgba(229, 62, 62, 0.1);
+    color: var(--danger);
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    margin-top: 12px;
+}
+
+.progress-container {
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--bg-subtle);
+    border-radius: var(--radius-md);
+}
+
+.progress-bar-bg {
+    height: 6px;
+    background: var(--border-light);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: var(--accent-solid);
+    border-radius: 10px;
+    transition: width 0.3s;
+}
+/* Lucide 图标统一样式 */
+[data-lucide] {
+    width: 48px;
+    height: 48px;
+    stroke: var(--accent-solid);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+}
+
+/* 功能卡片内图标 */
+.feature-icon [data-lucide] {
+    width: 48px;
+    height: 48px;
+}
+
+/* 工作区功能卡片图标 */
+.function-icon [data-lucide] {
+    width: 28px;
+    height: 28px;
+    stroke: currentColor;
+}
+
+/* 按钮内小图标 */
+.btn [data-lucide],
+.btn-secondary [data-lucide] {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    vertical-align: middle;
+}
+
+/* 主题切换按钮图标（重点缩小这个） */
+.theme-toggle [data-lucide],
+.theme-toggle-nav [data-lucide] {
+    width: 18px !important;
+    height: 18px !important;
+    stroke: currentColor;
+}

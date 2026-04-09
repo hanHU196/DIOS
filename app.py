@@ -10,6 +10,7 @@ import ai_module
 from document_reader import DocumentReader
 from db_manager import DatabaseManager
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import io
 
 # 初始化处理器
 processor = DocumentProcessor()
@@ -24,11 +25,12 @@ logger = logging.getLogger(__name__)
 # 配置
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_DOC_EXTENSIONS = {'txt', 'docx', 'md', 'xlsx'}
-ALLOWED_TEMPLATE_EXTENSIONS = {'xlsx', 'xls','docx'}
+ALLOWED_TEMPLATE_EXTENSIONS = {'xlsx', 'xls', 'docx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs('outputs', exist_ok=True)
 
 def allowed_file(filename, allowed_set=ALLOWED_DOC_EXTENSIONS):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_set
@@ -123,7 +125,7 @@ except ImportError as e:
 
 # AI模块
 try:
-    from ai_module import parse_instruction, extract_entities
+    from ai_module import parse_instruction, extract_entities, extract_entities_safe
     logger.info("成功导入 ai_module")
 except ImportError:
     logger.warning("导入 ai_module 失败，使用模拟函数")
@@ -133,13 +135,21 @@ except ImportError:
         return 'unknown'
     def extract_entities(text, targets):
         return {t: f'示例{t}' for t in targets}
+    def extract_entities_safe(text, targets):
+        return {t: f'示例{t}' for t in targets}
 
-# ---------------------------------------------------------
-
+# ========== 页面路由（新增工作区） ==========
 @app.route('/')
 def index():
+    """首页"""
     return render_template('index.html')
 
+@app.route('/workspace')
+def workspace():
+    """工作区页面"""
+    return render_template('workspace.html')
+
+# ========== 原有路由保持不变 ==========
 @app.route('/upload', methods=['POST'])
 def upload_file():
     doc_file = request.files.get('document')
@@ -265,6 +275,7 @@ def operate_document():
     else:
         return jsonify({'error': result['error']}), 400
 
+# ========== 核心 API 接口（供前端调用） ==========
 @app.route('/api/extract', methods=['POST'])
 def api_extract():
     """智能文档提取（增强版）"""
@@ -314,8 +325,11 @@ def api_extract():
             for doc_path in doc_paths:
                 db.save_cache(doc_path, fields, extracted)
         
+        # 确保返回格式为列表
         if isinstance(extracted, dict):
             extracted = [extracted]
+        elif not isinstance(extracted, list):
+            extracted = []
         
         # 保存提取记录
         db.save_extraction(source_files, fields, extracted, command)
@@ -329,6 +343,8 @@ def api_extract():
         
     except Exception as e:
         logger.error(f"提取失败: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/fill', methods=['POST'])
@@ -366,7 +382,7 @@ def api_fill():
         # ========== 特殊场景：单个 Excel 数据文件 + Word 模板 ==========
         is_excel_to_word = (len(doc_paths) == 1 and
                             doc_paths[0].endswith(('.xlsx', '.xls')) and
-                            is_word_template)   # 注意这里直接用 is_word_template
+                            is_word_template)
         
         if is_excel_to_word:
             output_filename = f"{os.path.splitext(os.path.basename(doc_paths[0]))[0]}_填表.docx"
@@ -374,7 +390,6 @@ def api_fill():
             os.makedirs('outputs', exist_ok=True)
             fill_word_from_excel(template_path, doc_paths[0], output_path)
             return send_file(output_path, as_attachment=True, download_name=output_filename)
-        
         
         # 解析模板字段
         if is_excel_template:
@@ -465,13 +480,139 @@ def api_fill():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/format', methods=['POST'])
+def api_format():
+    """文档格式调整"""
+    try:
+        file = request.files.get('document')
+        command = request.form.get('command', '').strip()
+        
+        if not file or not command:
+            return jsonify({'error': '请上传文档并输入指令'}), 400
+        
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+        
+        result = processor.operate_document(file_path, command)
+        
+        if result.get('success'):
+            return send_file(file_path, as_attachment=True, download_name=f'formatted_{filename}')
+        else:
+            return jsonify({'error': result.get('error', '格式调整失败')}), 400
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/qa', methods=['POST'])
+def api_qa():
+    """智能问答接口"""
+    try:
+        documents = request.files.getlist('documents')
+        question = request.form.get('question', '').strip()
+        
+        if not documents:
+            return jsonify({'error': '请上传文档'}), 400
+        
+        if not question:
+            return jsonify({'error': '请输入问题'}), 400
+        
+        # 提取所有文档内容
+        all_text = ""
+        source_files = []
+        
+        for doc in documents:
+            filename = secure_filename(doc.filename)
+            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            doc.save(path)
+            source_files.append(filename)
             
+            text = reader.read(path)
+            all_text += f"\n--- {filename} ---\n{text}\n"
+            
+            # 清理临时文件
+            os.remove(path)
+        
+        # 调用 AI 模块回答问题
+        try:
+            from ai_module import answer_question
+            answer = answer_question(all_text, question)
+        except ImportError:
+            # 模拟回答
+            answer = f"关于「{question}」的问题：\n\n根据文档分析，建议查阅相关条款获取详细信息。如需更精准的回答，请确保文档包含相关内容。"
+        
+        return jsonify({
+            'success': True,
+            'answer': answer,
+            'sources': source_files
+        })
+        
+    except Exception as e:
+        logger.error(f"问答失败: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/graph', methods=['POST'])
+def api_graph():
+    """知识图谱接口"""
+    try:
+        documents = request.files.getlist('documents')
+        
+        if not documents:
+            return jsonify({'error': '请上传文档'}), 400
+        
+        # 提取所有文档内容
+        all_text = ""
+        for doc in documents:
+            filename = secure_filename(doc.filename)
+            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            doc.save(path)
+            all_text += reader.read(path) + "\n"
+            os.remove(path)
+        
+        # 调用 AI 模块提取实体关系
+        try:
+            from ai_module import extract_entity_relations
+            graph_data = extract_entity_relations(all_text)
+        except ImportError:
+            # 默认图谱数据
+            graph_data = {
+                'nodes': [
+                    {'name': '合同主体', 'category': 0, 'symbolSize': 60},
+                    {'name': '甲方公司', 'category': 1, 'symbolSize': 45},
+                    {'name': '乙方公司', 'category': 1, 'symbolSize': 45},
+                    {'name': '合同金额', 'category': 2, 'symbolSize': 40},
+                    {'name': '签订日期', 'category': 2, 'symbolSize': 40}
+                ],
+                'links': [
+                    {'source': '合同主体', 'target': '甲方公司'},
+                    {'source': '合同主体', 'target': '乙方公司'},
+                    {'source': '合同主体', 'target': '合同金额'},
+                    {'source': '合同主体', 'target': '签订日期'}
+                ],
+                'categories': [
+                    {'name': '核心实体'},
+                    {'name': '参与方'},
+                    {'name': '属性'}
+                ]
+            }
+        
+        return jsonify({
+            'success': True,
+            'nodes': graph_data.get('nodes', []),
+            'links': graph_data.get('links', []),
+            'categories': graph_data.get('categories', [])
+        })
+        
+    except Exception as e:
+        logger.error(f"图谱生成失败: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     """获取系统统计信息"""
     stats = db.get_statistics()
     return jsonify(stats)
-
 
 @app.route('/api/history', methods=['GET'])
 def get_history():
@@ -479,7 +620,6 @@ def get_history():
     limit = request.args.get('limit', 20, type=int)
     history = db.get_fill_history(limit)
     return jsonify({'success': True, 'history': history})
-
 
 @app.route('/api/search', methods=['POST'])
 def search_data():
@@ -498,6 +638,7 @@ def search_data():
         'results': results
     })
 
+# ========== 辅助函数 ==========
 def parse_word_template(template_path):
     """解析 Word 模板中的占位符"""
     from docx import Document
@@ -540,7 +681,6 @@ def fill_word_with_data(template_path, data_records, output_path):
     doc.save(output_path)
     logger.info(f"✅ Word 文件已生成：{output_path}")
 
-
 def apply_filters_to_df(df, filters):
     """应用筛选条件到 DataFrame"""
     filtered_df = df.copy()
@@ -554,7 +694,6 @@ def apply_filters_to_df(df, filters):
             continue
         
         if filter_type == 'date_range':
-            # 日期范围筛选
             filtered_df[column] = pd.to_datetime(filtered_df[column], errors='coerce')
             start = f.get('start')
             end = f.get('end')
@@ -562,7 +701,6 @@ def apply_filters_to_df(df, filters):
             filtered_df = filtered_df[mask]
         
         elif filter_type == 'numeric':
-            # 数值比较筛选
             operator = f.get('operator')
             value = f.get('value')
             
@@ -579,69 +717,6 @@ def apply_filters_to_df(df, filters):
     
     return filtered_df
 
-
-def apply_filters_to_data(data_list, filters):
-    """应用筛选条件到字典列表（AI提取的数据）"""
-    filtered = []
-    for item in data_list:
-        match = True
-        for f in filters:
-            filter_type = f.get('type')
-            column = f.get('column')
-            value = item.get(column)
-            
-            if value is None:
-                match = False
-                break
-            
-            if filter_type == 'numeric':
-                operator = f.get('operator')
-                target = f.get('value')
-                try:
-                    num_value = float(value) if isinstance(value, str) else value
-                    if operator == '>' and not (num_value > target):
-                        match = False
-                    elif operator == '<' and not (num_value < target):
-                        match = False
-                    elif operator == '>=' and not (num_value >= target):
-                        match = False
-                    elif operator == '<=' and not (num_value <= target):
-                        match = False
-                except:
-                    match = False
-            elif filter_type == 'date_range':
-                # 日期范围筛选（简化处理）
-                pass
-        
-        if match:
-            filtered.append(item)
-    
-    return filtered
-
-@app.route('/api/format', methods=['POST'])
-def api_format():
-    try:
-        file = request.files.get('document')
-        command = request.form.get('command', '').strip()
-        
-        if not file or not command:
-            return jsonify({'error': '请上传文档并输入指令'}), 400
-        
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
-        
-        result = processor.operate_document(file_path, command)
-        
-        if result.get('success'):
-            return send_file(file_path, as_attachment=True, download_name=f'formatted_{filename}')
-        else:
-            return jsonify({'error': result.get('error', '格式调整失败')}), 400
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
 def fill_word_from_excel(template_path, excel_path, output_path):
     """动态版：根据 Word 表格前的段落文本提取城市名，根据表头自动匹配 Excel 列名"""
     from docx import Document
@@ -655,18 +730,15 @@ def fill_word_from_excel(template_path, excel_path, output_path):
     doc = Document(template_path)
     tables = doc.tables
 
-    # 3. 识别每个表格对应的城市（从段落文本中提取城市名）
+    # 3. 识别每个表格对应的城市
     city_table_map = {}
     table_index = 0
     for para in doc.paragraphs:
         text = para.text.strip()
         if text:
-            # 尝试从段落中提取城市名（匹配“德州市”、“潍坊市”、“临沂市”等）
-            # 可根据实际城市列表调整正则
             match = re.search(r'(德州市|潍坊市|临沂市)', text)
             if match:
                 city_name = match.group(1)
-                # 检查后面是否有表格
                 next_elem = para._element.getnext()
                 while next_elem is not None:
                     if next_elem.tag.endswith('tbl'):
@@ -678,13 +750,12 @@ def fill_word_from_excel(template_path, excel_path, output_path):
         if table_index >= len(tables):
             break
 
-    # 降级方案：如果未识别到，使用顺序匹配（城市列表可根据 Excel 中的实际城市动态获取）
     if not city_table_map:
-        # 从 Excel 中获取所有不重复的城市名（按顺序）
-        cities = df['城市'].dropna().unique().tolist()
-        for i, city in enumerate(cities):
-            if i < len(tables):
-                city_table_map[city] = tables[i]
+        if '城市' in df.columns:
+            cities = df['城市'].dropna().unique().tolist()
+            for i, city in enumerate(cities):
+                if i < len(tables):
+                    city_table_map[city] = tables[i]
 
     # 4. 获取 Excel 列名
     excel_columns = df.columns.tolist()
@@ -693,17 +764,14 @@ def fill_word_from_excel(template_path, excel_path, output_path):
     for city, table in city_table_map.items():
         city_data = df[df['城市'] == city]
 
-        # 获取 Word 表格表头（第一行）
         header_row = table.rows[0]
         header_texts = [cell.text.strip() for cell in header_row.cells]
 
-        # 建立列映射
         col_mapping = {}
         for i, header in enumerate(header_texts):
             if header in excel_columns:
                 col_mapping[i] = header
             else:
-                # 模糊匹配（去除空格、括号）
                 clean_header = header.replace(' ', '').replace('（', '').replace('）', '')
                 for col in excel_columns:
                     if clean_header in col.replace(' ', '').replace('（', '').replace('）', ''):
@@ -712,14 +780,12 @@ def fill_word_from_excel(template_path, excel_path, output_path):
                 if i not in col_mapping:
                     col_mapping[i] = None
 
-        # 调整行数
         existing_rows = len(table.rows) - 1
         needed_rows = len(city_data) - existing_rows
         if needed_rows > 0:
             for _ in range(needed_rows):
                 table.add_row()
 
-        # 填充数据
         for row_idx, (_, row_data) in enumerate(city_data.iterrows()):
             target_row = table.rows[row_idx + 1]
             for col_idx, excel_col in col_mapping.items():
@@ -732,4 +798,4 @@ def fill_word_from_excel(template_path, excel_path, output_path):
     return output_path
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
