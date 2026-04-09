@@ -52,34 +52,41 @@ async function addToHistory(file) {
     }
 }
 
-// 修改 importFromHistory 函数
+// 修改 importFromHistory 函数（使用专属通道下载真实文件）
 async function importFromHistory(items) {
     const ids = items.map(item => item._id);
     try {
         const response = await fetch('/api/history/import', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: ids })
         });
         
         const data = await response.json();
         if (data.success && data.files) {
-            // 设置标记，避免重复保存
+            // 设置标记，避免导入时又被重新存一遍历史
             isImportingFromHistory = true;
             
             for (const fileInfo of data.files) {
-                // 通过 temp_path 下载文件并添加到 fileManager
-                const fileResponse = await fetch(fileInfo.temp_path);
+                // 【修复核心】：去请求后端的专属下载通道，而不是去读死目录
+                const fileResponse = await fetch(`/api/history/download/${fileInfo.id}`);
+                
+                if (!fileResponse.ok) {
+                    throw new Error(`无法获取文件流: ${fileInfo.name}`);
+                }
+                
+                // 将真实的二进制流包装回 File 对象
                 const blob = await fileResponse.blob();
-                const file = new File([blob], fileInfo.name, { type: 'application/octet-stream' });
+                const file = new File([blob], fileInfo.name, { 
+                    type: fileResponse.headers.get('content-type') || 'application/octet-stream' 
+                });
+                
                 if (currentFileManager) {
                     currentFileManager.addFiles([file]);
                 }
             }
             
-            // 延迟重置标记，确保 onChange 回调执行完毕
+            // 延迟释放锁定
             setTimeout(() => {
                 isImportingFromHistory = false;
             }, 500);
@@ -90,7 +97,6 @@ async function importFromHistory(items) {
         isImportingFromHistory = false;
     }
 }
-
 // 删除历史文档（单个或多个）
 async function deleteHistoryItem(id) {
     try {
@@ -830,141 +836,819 @@ function renderExtractUI(container) {
         }
     });
 }
-
-// 表格填写 UI
+// 表格填写 UI（支持 Word 和 Excel 模板，自动识别）
 function renderFillUI(container) {
+    
     container.innerHTML = `
         <div class="form-group">
-            <label class="form-label">Excel 模板</label>
-            <input type="file" id="templateFile" accept=".xlsx,.xls" style="padding: 8px;">
+            <label class="form-label">上传模板文件</label>
+            <div class="template-file-area" id="templateFileArea">
+                <input type="file" id="templateFile" accept=".xlsx,.xls,.docx" class="file-input">
+                <div class="template-file-placeholder" id="templateFilePlaceholder">
+                    <i data-lucide="file-up" style="width: 32px; height: 32px;"></i>
+                    <span>点击或拖拽模板文件至此</span>
+                    <small>支持 .xlsx, .xls, .docx 格式</small>
+                </div>
+            </div>
+            <div id="templateFileInfo" class="template-file-info hidden">
+                <i data-lucide="file-check"></i>
+                <span id="templateFileName">未选择文件</span>
+                <button class="template-remove-btn" id="removeTemplateBtn">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
         </div>
         <div class="form-group">
             <label class="form-label">字段指令</label>
             <input type="text" id="fillCommand" class="input" placeholder="甲方、乙方、金额">
+            <div style="font-size: 12px; color: var(--text-placeholder); margin-top: 6px;">
+                <i data-lucide="lightbulb" style="width: 12px; height: 12px;"></i> 支持：甲方、乙方、金额等字段
+            </div>
         </div>
         <button class="btn-primary" id="executeFill">
-            生成并下载
+             生成并下载
         </button>
         <div id="fillResultArea" style="margin-top: 20px;"></div>
         <div id="fillError" class="error-message hidden"></div>
     `;
+    
     lucide.createIcons();
     
-    document.getElementById('executeFill').addEventListener('click', async () => {
-        const command = document.getElementById('fillCommand').value.trim();
-        const template = document.getElementById('templateFile').files[0];
+    let currentTemplateFile = null;
+    
+    const templateInput = document.getElementById('templateFile');
+    const templatePlaceholder = document.getElementById('templateFilePlaceholder');
+    const templateFileInfo = document.getElementById('templateFileInfo');
+    const templateFileName = document.getElementById('templateFileName');
+    
+    // 修复：完整的清空函数
+    function clearTemplateFile() {
+        console.log('清除模板文件'); // 调试日志
+        currentTemplateFile = null;
+        templateInput.value = '';
         
-        if (!command) { Utils.showError('fillError', '请输入字段指令'); return; }
-        if (!template) { Utils.showError('fillError', '请上传模板文件'); return; }
+        // 关键修复：确保 UI 正确更新
+        templateFileInfo.classList.add('hidden');
+        templatePlaceholder.classList.remove('hidden');
+        templateFileName.textContent = '未选择文件';
         
-        const files = currentFileManager.getFiles();
-        if (files.length === 0) { Utils.showError('fillError', '请先上传源文档'); return; }
-        
-        const area = document.getElementById('fillResultArea');
-        area.innerHTML = '<div class="progress-container"><div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 50%"></div></div><div><i data-lucide="loader" style="width: 16px; height: 16px; animation: spin 1s linear infinite;"></i> 处理中...</div></div>';
-        lucide.createIcons();
-        
-        const formData = new FormData();
-        for (const file of files) {
-            formData.append('documents', file);
+        // 强制重新渲染图标
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
         }
-        formData.append('template', template);
-        formData.append('command', command);
-        
-        try {
-            const response = await fetch('/api/fill', {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || '生成失败');
+    }
+    
+    function updateTemplateDisplay(file) {
+        currentTemplateFile = file;
+        templateFileName.textContent = file.name;
+        templatePlaceholder.classList.add('hidden');
+        templateFileInfo.classList.remove('hidden');
+    }
+    
+    // 文件选择
+    templateInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if (!file.name.match(/\.(xlsx|xls|docx)$/i)) {
+                Utils.showError('fillError', '请上传 Excel (.xlsx, .xls) 或 Word (.docx) 文件');
+                templateInput.value = '';
+                return;
             }
-            
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            
-            area.innerHTML = `
-                <div style="text-align: center; padding: 20px;">
-                    <a href="${url}" class="btn-secondary" download="filled_template.xlsx" style="display: inline-block; padding: 10px 24px; text-decoration: none;">
-                        <i data-lucide="download" style="width: 14px; height: 14px;"></i> 下载表格文件
-                    </a>
-                </div>
-            `;
-            lucide.createIcons();
-            
-        } catch (error) {
-            Utils.showError('fillError', error.message);
-            area.innerHTML = `<div class="error-message"><i data-lucide="alert-circle" style="width: 16px; height: 16px;"></i> ${error.message}</div>`;
-            lucide.createIcons();
+            updateTemplateDisplay(file);
         }
     });
+    
+    // ========== 删除按钮：直接绑定事件 ==========
+    setTimeout(() => {
+        const removeBtn = document.getElementById('removeTemplateBtn');
+        if (removeBtn) {
+            // 移除所有已有事件，重新绑定
+            const newRemoveBtn = removeBtn.cloneNode(true);
+            removeBtn.parentNode.replaceChild(newRemoveBtn, removeBtn);
+            newRemoveBtn.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                clearTemplateFile();
+                return false;
+            };
+        }
+    }, 50);
+    
+    // 拖拽上传模板
+    const templateArea = document.getElementById('templateFileArea');
+    // 移除旧的事件监听器（避免重复绑定）
+    const newTemplateArea = templateArea.cloneNode(true);
+    templateArea.parentNode.replaceChild(newTemplateArea, templateArea);
+    
+    newTemplateArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        newTemplateArea.style.borderColor = 'var(--accent-solid)';
+        newTemplateArea.style.backgroundColor = 'var(--accent-soft)';
+    });
+    newTemplateArea.addEventListener('dragleave', () => {
+        newTemplateArea.style.borderColor = '';
+        newTemplateArea.style.backgroundColor = '';
+    });
+    newTemplateArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        newTemplateArea.style.borderColor = '';
+        newTemplateArea.style.backgroundColor = '';
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+            const file = files[0];
+            if (!file.name.match(/\.(xlsx|xls|docx)$/i)) {
+                Utils.showError('fillError', '请上传 Excel (.xlsx, .xls) 或 Word (.docx) 文件');
+                return;
+            }
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            templateInput.files = dt.files;
+            updateTemplateDisplay(file);
+        }
+    });
+    newTemplateArea.addEventListener('click', () => {
+        templateInput.click();
+    });
+    
+    // 执行填表
+    const executeBtn = document.getElementById('executeFill');
+    if (executeBtn) {
+        const newExecuteBtn = executeBtn.cloneNode(true);
+        executeBtn.parentNode.replaceChild(newExecuteBtn, executeBtn);
+        newExecuteBtn.addEventListener('click', async () => {
+            const command = document.getElementById('fillCommand').value.trim();
+            
+            if (!command) { Utils.showError('fillError', '请输入字段指令'); return; }
+            if (!currentTemplateFile) { Utils.showError('fillError', '请上传模板文件'); return; }
+            
+            const files = currentFileManager.getFiles();
+            if (files.length === 0) { Utils.showError('fillError', '请先上传源文档'); return; }
+            
+            const area = document.getElementById('fillResultArea');
+            area.innerHTML = '<div class="progress-container"><div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 50%"></div></div><div><i data-lucide="loader" style="width: 16px; height: 16px; animation: spin 1s linear infinite;"></i> 处理中...</div></div>';
+            lucide.createIcons();
+            
+            const isWordTemplate = currentTemplateFile.name.match(/\.(docx)$/i);
+            const templateType = isWordTemplate ? 'word' : 'excel';
+            
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append('documents', file);
+            }
+            formData.append('template', currentTemplateFile);
+            formData.append('command', command);
+            formData.append('template_type', templateType);
+            
+            try {
+                const response = await fetch('/api/fill', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '生成失败');
+                }
+                
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const extension = isWordTemplate ? '.docx' : '.xlsx';
+                
+                area.innerHTML = `
+                    <div style="text-align: center; padding: 20px;">
+                        <a href="${url}" class="btn-secondary" download="filled_template${extension}" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; text-decoration: none; border-radius: 40px;">
+                            <i data-lucide="download" style="width: 14px; height: 14px;"></i> 下载${isWordTemplate ? '文档' : '表格'}文件
+                        </a>
+                    </div>
+                `;
+                lucide.createIcons();
+                
+            } catch (error) {
+                Utils.showError('fillError', error.message);
+                area.innerHTML = `<div class="error-message"><i data-lucide="alert-circle" style="width: 16px; height: 16px;"></i> ${error.message}</div>`;
+                lucide.createIcons();
+            }
+        });
+    }
+}
+// ========== 在 renderFillUI 函数外面，绑定全局事件委托（只绑定一次） ==========
+// 使用全局事件委托处理删除按钮
+if (!window._fillDeleteHandlerBound) {
+    document.body.addEventListener('click', (e) => {
+        // 检查点击的是否是模板删除按钮
+        const deleteBtn = e.target.closest('#removeTemplateBtn');
+        if (deleteBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // 获取当前激活的功能页面中的元素
+            const templateInput = document.getElementById('templateFile');
+            const templatePlaceholder = document.getElementById('templateFilePlaceholder');
+            const templateFileInfo = document.getElementById('templateFileInfo');
+            
+            if (templateInput && templatePlaceholder && templateFileInfo) {
+                templateInput.value = '';
+                templatePlaceholder.classList.remove('hidden');
+                templateFileInfo.classList.add('hidden');
+            }
+        }
+    });
+    window._fillDeleteHandlerBound = true;
 }
 
-// 格式调整 UI
+// 格式调整 UI（根据文件类型动态显示）
 function renderFormatUI(container) {
+    const files = currentFileManager.getFiles();
+    const fileCount = files.length;
+    
+    const hasWord = files.some(f => f.name.match(/\.(docx|doc)$/i));
+    const hasExcel = files.some(f => f.name.match(/\.(xlsx|xls)$/i));
+    const hasMixed = hasWord && hasExcel;
+    
+    let activePanel = 'word';
+    if (hasExcel && !hasWord) {
+        activePanel = 'excel';
+    } else if (hasMixed) {
+        activePanel = 'mixed';
+    }
+    
     container.innerHTML = `
-        <div class="form-group">
-            <label class="form-label">格式指令</label>
-            <input type="text" id="formatCommand" class="input" placeholder="将所有段落居中、标题加粗">
-            <div style="font-size: 12px; color: var(--text-placeholder); margin-top: 6px;">
-                <i data-lucide="lightbulb" style="width: 12px; height: 12px; display: inline;"></i> 支持：对齐、加粗、字体、字号等
+        <div class="format-info-bar">
+            <div class="format-doc-info">
+                <i data-lucide="file-text"></i>
+                <span>已选择 <strong>${fileCount}</strong> 个文档</span>
+                ${fileCount > 0 && fileCount <= 3 ? `<span class="format-doc-names">${files.map(f => f.name).join(', ')}</span>` : ''}
+            </div>
+            ${hasMixed ? '<div class="format-warning">检测到混合文件类型，请选择要操作的文档类型</div>' : ''}
+            ${fileCount === 0 ? '<div class="format-warning"><i data-lucide="alert-triangle"></i> 请先在上方上传文档</div>' : ''}
+        </div>
+        
+        <!-- 文件类型切换标签 -->
+        <div class="format-type-tabs" id="formatTypeTabs" style="${hasMixed ? 'display: flex' : 'display: none'}">
+            <button class="format-tab ${activePanel === 'word' ? 'active' : ''}" data-type="word">
+                Word 文档
+            </button>
+            <button class="format-tab ${activePanel === 'excel' ? 'active' : ''}" data-type="excel">
+                Excel 表格
+            </button>
+        </div>
+        
+        <!-- Word 操作面板（包含应用范围） -->
+        <div id="wordPanel" class="format-panel" style="${activePanel === 'word' ? 'display: block' : 'display: none'}">
+            ${renderWordRangePanel()}
+            ${renderWordFormatPanel()}
+        </div>
+        
+        <!-- Excel 操作面板（包含应用范围） -->
+        <div id="excelPanel" class="format-panel" style="${activePanel === 'excel' ? 'display: block' : 'display: none'}">
+            ${renderExcelRangePanel()}
+            ${renderExcelFormatPanel()}
+        </div>
+        
+        <!-- 自定义指令区域 -->
+        <div class="format-custom-section">
+            <div class="format-custom-header">
+                <span>自定义指令</span>
+                <span class="custom-hint">（可选，会覆盖上面的选择）</span>
+            </div>
+            <textarea id="formatCommand" class="format-custom-input" rows="2" 
+                placeholder='Word示例：第2段居中、加粗   Excel示例：第2行加粗、第3列居中'></textarea>
+            <div class="format-custom-example">
+                <span id="formatHint">Word：第2段居中、加粗 | Excel：第2行加粗、第3列居中、A1单元格红色</span>
             </div>
         </div>
-        <button class="btn-primary" id="executeFormat">
+        
+        <!-- 指令预览 -->
+        <div class="format-command-preview" id="formatCommandPreview">
+            <span>生成的指令：</span>
+            <code id="commandPreviewText">-</code>
+        </div>
+        
+        <button class="btn-primary" id="executeFormat" ${fileCount === 0 ? 'disabled' : ''}>
             应用格式
         </button>
+        <div id="formatProgressArea" style="margin-top: 20px;"></div>
         <div id="formatResultArea" style="margin-top: 20px;"></div>
         <div id="formatError" class="error-message hidden"></div>
     `;
+    
     lucide.createIcons();
     
-    document.getElementById('executeFormat').addEventListener('click', async () => {
-        const command = document.getElementById('formatCommand').value.trim();
-        if (!command) { Utils.showError('formatError', '请输入格式指令'); return; }
-        
-        const files = currentFileManager.getFiles();
-        if (files.length === 0) { Utils.showError('formatError', '请先上传文档'); return; }
-        
-        const area = document.getElementById('formatResultArea');
-        area.innerHTML = '<div class="progress-container"><div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 50%"></div></div><div><i data-lucide="loader" style="width: 16px; height: 16px; animation: spin 1s linear infinite;"></i> 处理中...</div></div>';
-        lucide.createIcons();
-        
-        const formData = new FormData();
-        formData.append('document', files[0]);
-        formData.append('command', command);
-        
-        try {
-            const response = await fetch('/api/format', {
-                method: 'POST',
-                body: formData
+    let currentType = activePanel === 'excel' ? 'excel' : 'word';
+    
+    /// Word 范围切换逻辑
+    const wordRangeRadios = document.querySelectorAll('input[name="wordRangeType"]');
+    const wordParagraphGroup = document.getElementById('wordParagraphGroup');
+    const wordKeywordGroup = document.getElementById('wordKeywordGroup');
+
+    if (wordRangeRadios.length) {
+        wordRangeRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const val = e.target.value;
+                wordParagraphGroup.style.display = 'none';
+                wordKeywordGroup.style.display = 'none';
+                
+                if (val === 'paragraph') wordParagraphGroup.style.display = 'block';
+                else if (val === 'keyword') wordKeywordGroup.style.display = 'block';
+                
+                updateCommandPreview();
             });
+        });
+    }
+
+    // Excel 范围切换逻辑
+    const excelRangeRadios = document.querySelectorAll('input[name="excelRangeType"]');
+    const excelRowGroup = document.getElementById('excelRowGroup');
+    const excelColGroup = document.getElementById('excelColGroup');
+    const excelCellGroup = document.getElementById('excelCellGroup');
+
+    if (excelRangeRadios.length) {
+        excelRangeRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const val = e.target.value;
+                excelRowGroup.style.display = 'none';
+                excelColGroup.style.display = 'none';
+                excelCellGroup.style.display = 'none';
+                
+                if (val === 'row') excelRowGroup.style.display = 'block';
+                else if (val === 'col') excelColGroup.style.display = 'block';
+                else if (val === 'cell') excelCellGroup.style.display = 'block';
+                
+                updateCommandPreview();
+            });
+        });
+    }
+
+    // 标签切换逻辑
+    const tabs = document.querySelectorAll('.format-tab');
+    const wordPanel = document.getElementById('wordPanel');
+    const excelPanel = document.getElementById('excelPanel');
+    const hintSpan = document.getElementById('formatHint');
+    
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            currentType = tab.dataset.type;
             
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || '格式调整失败');
+            if (currentType === 'word') {
+                wordPanel.style.display = 'block';
+                excelPanel.style.display = 'none';
+                if (hintSpan) hintSpan.innerHTML = 'Word示例：第2段居中、加粗、字体宋体 | 第1-3段斜体';
+            } else {
+                wordPanel.style.display = 'none';
+                excelPanel.style.display = 'block';
+                if (hintSpan) hintSpan.innerHTML = 'Excel示例：第2行加粗、第3列居中、A1单元格字体红色 | 列宽设为20';
             }
             
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            
-            area.innerHTML = `
-                <div style="text-align: center; padding: 20px;">
-                    <a href="${url}" class="btn-secondary" download="formatted_document.docx" style="display: inline-block; padding: 10px 24px; text-decoration: none;">
-                        <i data-lucide="download" style="width: 14px; height: 14px;"></i> 下载调整后文档
-                    </a>
-                </div>
-            `;
-            lucide.createIcons();
-            
-        } catch (error) {
-            Utils.showError('formatError', error.message);
-            area.innerHTML = `<div class="error-message"><i data-lucide="alert-circle" style="width: 16px; height: 16px;"></i> ${error.message}</div>`;
-            lucide.createIcons();
-        }
+            updateCommandPreview();
+        });
     });
+    
+  function getWordRangeDescription() {
+    const rangeType = document.querySelector('input[name="wordRangeType"]:checked')?.value;
+    
+    switch(rangeType) {
+        case 'full': return '';
+        case 'paragraph':
+            const pVal = document.getElementById('wordParagraphValue')?.value.trim();
+            if (!pVal) return '';
+            // 支持：3、1-5、2,4,6 等格式
+            return `第${pVal}段`;
+        case 'keyword':
+            const kVal = document.getElementById('wordKeywordValue')?.value.trim();
+            return kVal ? `包含"${kVal}"的段落` : '';
+        default: return '';
+    }
 }
+    // 获取 Excel 范围描述
+    function getExcelRangeDescription() {
+        const rangeType = document.querySelector('input[name="excelRangeType"]:checked')?.value;
+        
+        switch(rangeType) {
+            case 'all': return '';
+            case 'row':
+                const rowVal = document.getElementById('excelRowNumber')?.value.trim();
+                if (!rowVal) return '';
+                if (rowVal.includes('-')) return `第${rowVal}行`;
+                if (rowVal.includes(',')) return `第${rowVal}行`;
+                return `第${rowVal}行`;
+            case 'col':
+                const colVal = document.getElementById('excelColNumber')?.value.trim();
+                if (!colVal) return '';
+                if (colVal.includes('-')) return `第${colVal}列`;
+                if (colVal.includes(',')) return `第${colVal}列`;
+                return `第${colVal}列`;
+            case 'cell':
+                const cellVal = document.getElementById('excelCellValue')?.value.trim().toUpperCase();
+                if (!cellVal) return '';
+                return `${cellVal}单元格`;
+            case 'header':
+                return `表头`;
+            default: return '';
+        }
+    }
+    
+    // 获取 Word 选中的格式
+    function getWordSelectedFormats() {
+        const formats = [];
+        const align = document.getElementById('wordAlignSelect')?.value;
+        const fontStyle = document.getElementById('wordFontStyleSelect')?.value;
+        const font = document.getElementById('wordFontSelect')?.value;
+        const fontSize = document.getElementById('wordFontSizeSelect')?.value;
+        const paragraph = document.getElementById('wordParagraphSelect')?.value;
+        const color = document.getElementById('wordColorSelect')?.value;
+        
+        if (align && align !== '') formats.push(align);
+        if (fontStyle && fontStyle !== '') formats.push(fontStyle);
+        if (font && font !== '') formats.push(font);
+        if (fontSize && fontSize !== '') formats.push(fontSize);
+        if (paragraph && paragraph !== '') formats.push(paragraph);
+        if (color && color !== '') formats.push(color);
+        
+        return formats;
+    }
+    
+    // 获取 Excel 选中的格式
+    function getExcelSelectedFormats() {
+        const formats = [];
+        const align = document.getElementById('excelAlignSelect')?.value;
+        const fontStyle = document.getElementById('excelFontStyleSelect')?.value;
+        const font = document.getElementById('excelFontSelect')?.value;
+        const fontSize = document.getElementById('excelFontSizeSelect')?.value;
+        const color = document.getElementById('excelColorSelect')?.value;
+        const colWidth = document.getElementById('excelColWidth')?.value;
+        const rowHeight = document.getElementById('excelRowHeight')?.value;
+        
+        if (align && align !== '') formats.push(align);
+        if (fontStyle && fontStyle !== '') formats.push(fontStyle);
+        if (font && font !== '') formats.push(font);
+        if (fontSize && fontSize !== '') formats.push(fontSize);
+        if (color && color !== '') formats.push(color);
+        if (colWidth && colWidth !== '') formats.push(`列宽${colWidth}`);
+        if (rowHeight && rowHeight !== '') formats.push(`行高${rowHeight}`);
+        
+        return formats;
+    }
+    
+    // 更新指令预览
+    function updateCommandPreview() {
+        const previewText = document.getElementById('commandPreviewText');
+        const customCommand = document.getElementById('formatCommand')?.value.trim();
+        
+        let finalCommand = '';
+        
+        if (customCommand) {
+            finalCommand = customCommand;
+        } else {
+            if (currentType === 'word') {
+                const rangeDesc = getWordRangeDescription();
+                const formats = getWordSelectedFormats();
+                if (formats.length > 0) {
+                    finalCommand = rangeDesc ? `${rangeDesc}${formats.join('、')}` : formats.join('、');
+                }
+            } else {
+                const rangeDesc = getExcelRangeDescription();
+                const formats = getExcelSelectedFormats();
+                if (formats.length > 0) {
+                    finalCommand = rangeDesc ? `${rangeDesc}${formats.join('、')}` : formats.join('、');
+                }
+            }
+        }
+        
+        if (previewText) previewText.textContent = finalCommand || '-';
+    }
+    
+    // 监听变化
+    const wordSelects = document.querySelectorAll('#wordPanel .format-select, #wordPanel .range-input');
+    const excelSelects = document.querySelectorAll('#excelPanel .format-select, #excelPanel .range-input, #excelPanel .format-number-input');
+    wordSelects.forEach(select => select.addEventListener('change', updateCommandPreview));
+    excelSelects.forEach(select => select.addEventListener('change', updateCommandPreview));
+    const customInput = document.getElementById('formatCommand');
+    if (customInput) customInput.addEventListener('input', updateCommandPreview);
+    
+    // 进度条和执行逻辑
+    function updateProgress(percent, status, detail) {
+        const progressArea = document.getElementById('formatProgressArea');
+        if (!progressArea) return;
+        if (percent === 0) {
+            progressArea.innerHTML = '';
+            return;
+        }
+        progressArea.innerHTML = `
+            <div class="progress-container loading">
+                <div class="progress-header"><div class="progress-title"><i data-lucide="loader"></i><span>格式调整中</span></div><div class="progress-stats"><span class="progress-percent">${percent}%</span></div></div>
+                <div class="progress-bar-wrapper"><div class="progress-bar-bg"><div class="progress-bar-fill" style="width: ${percent}%"></div></div></div>
+                <div class="progress-details"><div class="progress-status">${status}</div><div class="progress-step">${detail}</div></div>
+            </div>
+        `;
+        lucide.createIcons();
+    }
+    
+    // 执行格式调整
+    const executeBtn = document.getElementById('executeFormat');
+    if (executeBtn) {
+        const newExecuteBtn = executeBtn.cloneNode(true);
+        executeBtn.parentNode.replaceChild(newExecuteBtn, executeBtn);
+        newExecuteBtn.addEventListener('click', async () => {
+            const files = currentFileManager.getFiles();
+            if (files.length === 0) {
+                Utils.showError('formatError', '请先上传文档');
+                return;
+            }
+            
+            let command = document.getElementById('formatCommand')?.value.trim();
+            if (!command) {
+                if (currentType === 'word') {
+                    const rangeDesc = getWordRangeDescription();
+                    const formats = getWordSelectedFormats();
+                    if (formats.length === 0) {
+                        Utils.showError('formatError', '请选择格式指令或输入自定义指令');
+                        return;
+                    }
+                    command = rangeDesc ? `${rangeDesc}${formats.join('、')}` : formats.join('、');
+                } else {
+                    const rangeDesc = getExcelRangeDescription();
+                    const formats = getExcelSelectedFormats();
+                    if (formats.length === 0) {
+                        Utils.showError('formatError', '请选择格式指令或输入自定义指令');
+                        return;
+                    }
+                    command = rangeDesc ? `${rangeDesc}${formats.join('、')}` : formats.join('、');
+                }
+            }
+            
+            const resultArea = document.getElementById('formatResultArea');
+            resultArea.innerHTML = '';
+            
+            updateProgress(30, '正在处理', `应用指令: ${command.substring(0, 50)}...`);
+            
+            const formData = new FormData();
+            for (const file of files) formData.append('documents', file);
+            formData.append('command', command);
+            
+            try {
+                const response = await fetch('/api/format/batch', { method: 'POST', body: formData });
+                if (!response.ok) throw new Error('格式调整失败');
+                
+                updateProgress(100, '处理完成', '文档已生成');
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                
+                setTimeout(() => {
+                    updateProgress(0, '', '');
+                    resultArea.innerHTML = files.length === 1 ? `
+                        <div class="format-result success">
+                            <div><strong>处理完成！</strong><p style="font-size: 0.75rem;">指令：${command.length > 60 ? command.substring(0, 60) + '...' : command}</p><a href="${url}" class="download-link" download="formatted_${files[0].name}"><i data-lucide="download"></i> 下载调整后的文档</a></div>
+                        </div>
+                    ` : `
+                        <div class="format-result success">
+                            <div><strong>批量处理完成！</strong><p style="font-size: 0.75rem;">指令：${command.length > 60 ? command.substring(0, 60) + '...' : command}</p><span>共处理 ${files.length} 个文档</span><a href="${url}" class="download-link" download="formatted_documents.zip"><i data-lucide="download"></i> 下载全部（ZIP打包）</a></div>
+                        </div>
+                    `;
+                    lucide.createIcons();
+                }, 500);
+            } catch (error) {
+                updateProgress(0, '', '');
+                Utils.showError('formatError', error.message);
+            }
+        });
+    }
+    
+    updateCommandPreview();
+}
+
+function renderWordRangePanel() {
+    return `
+        <div class="format-range-section">
+            <div class="format-range-header">
+                <span>应用范围</span>
+            </div>
+            <div class="format-range-options">
+                <label class="range-option">
+                    <input type="radio" name="wordRangeType" value="full" checked>
+                    <span>全文</span>
+                </label>
+                <label class="range-option">
+                    <input type="radio" name="wordRangeType" value="paragraph">
+                    <span>指定段落</span>
+                </label>
+                <label class="range-option">
+                    <input type="radio" name="wordRangeType" value="keyword">
+                    <span>关键词定位</span>
+                </label>
+            </div>
+            
+            <!-- 指定段落（支持单个、范围、多个） -->
+            <div class="range-input-group" id="wordParagraphGroup" style="display: none;">
+                <div class="range-input-wrapper">
+                    <input type="text" id="wordParagraphValue" class="range-input" placeholder="段落：3 或 1-5 或 2,4,6">
+                </div>
+            </div>
+            
+            <!-- 关键词定位 -->
+            <div class="range-input-group" id="wordKeywordGroup" style="display: none;">
+                <div class="range-input-wrapper">
+                    <input type="text" id="wordKeywordValue" class="range-input" placeholder="关键词，如：甲方、合同">
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderExcelRangePanel() {
+    return `
+        <div class="format-range-section">
+            <div class="format-range-header">
+                <span>应用范围</span>
+            </div>
+            <div class="format-range-options">
+                <label class="range-option">
+                    <input type="radio" name="excelRangeType" value="all" checked>
+                    <span>全部</span>
+                </label>
+                <label class="range-option">
+                    <input type="radio" name="excelRangeType" value="row">
+                    <span>指定行</span>
+                </label>
+                <label class="range-option">
+                    <input type="radio" name="excelRangeType" value="col">
+                    <span>指定列</span>
+                </label>
+                <label class="range-option">
+                    <input type="radio" name="excelRangeType" value="cell">
+                    <span>单元格</span>
+                </label>
+                <label class="range-option">
+                    <input type="radio" name="excelRangeType" value="header">
+                    <span>表头</span>
+                </label>
+            </div>
+            
+            <div class="range-input-group" id="excelRowGroup" style="display: none;">
+                <div class="range-input-wrapper">
+                    <input type="text" id="excelRowNumber" class="range-input" placeholder="行号，如：3 或 1-5 或 2,4,6">
+                </div>
+            </div>
+            
+            <div class="range-input-group" id="excelColGroup" style="display: none;">
+                <div class="range-input-wrapper">
+                    <input type="text" id="excelColNumber" class="range-input" placeholder="列号，如：2 或 1-3">
+                </div>
+            </div>
+            
+            <div class="range-input-group" id="excelCellGroup" style="display: none;">
+                <div class="range-input-wrapper">
+                    <input type="text" id="excelCellValue" class="range-input" placeholder="单元格，如：A1、B3、C5">
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderWordFormatPanel() {
+    return `
+        <div class="format-presets-section">
+            <div class="format-presets-header">
+                <span>Word 格式指令</span>
+                <button class="reset-formats-btn" id="resetFormatsBtn">
+                    <i data-lucide="refresh-cw" style="width: 12px; height: 12px;"></i> 重置所有
+                </button>
+            </div>
+            <div class="format-select-grid">
+                <div class="format-select-item">
+                    <label>对齐</label>
+                    <select id="wordAlignSelect" class="format-select">
+                        <option value="">不设置</option>
+                        <option value="居中">居中</option>
+                        <option value="左对齐">左对齐</option>
+                        <option value="右对齐">右对齐</option>
+                        <option value="两端对齐">两端对齐</option>
+                    </select>
+                </div>
+                <div class="format-select-item">
+                    <label>字体样式</label>
+                    <select id="wordFontStyleSelect" class="format-select">
+                        <option value="">不设置</option>
+                        <option value="加粗">加粗</option>
+                        <option value="斜体">斜体</option>
+                        <option value="下划线">下划线</option>
+                    </select>
+                </div>
+                <div class="format-select-item">
+                    <label>字体</label>
+                    <select id="wordFontSelect" class="format-select">
+                        <option value="">不设置</option>
+                        <option value="字体宋体">宋体</option>
+                        <option value="字体黑体">黑体</option>
+                        <option value="字体楷体">楷体</option>
+                        <option value="字体微软雅黑">微软雅黑</option>
+                    </select>
+                </div>
+                <div class="format-select-item">
+                    <label>字号</label>
+                    <select id="wordFontSizeSelect" class="format-select">
+                        <option value="">不设置</option>
+                        <option value="字号12">12</option>
+                        <option value="字号14">14</option>
+                        <option value="字号16">16</option>
+                        <option value="字号18">18</option>
+                        <option value="字号20">20</option>
+                    </select>
+                </div>
+                <div class="format-select-item">
+                    <label>段落</label>
+                    <select id="wordParagraphSelect" class="format-select">
+                        <option value="">不设置</option>
+                        <option value="行间距1.5">行间距1.5</option>
+                        <option value="行间距2">行间距2</option>
+                        <option value="首行缩进">首行缩进</option>
+                    </select>
+                </div>
+                <div class="format-select-item">
+                    <label>颜色</label>
+                    <select id="wordColorSelect" class="format-select">
+                        <option value="">不设置</option>
+                        <option value="字体颜色红色">红色</option>
+                        <option value="字体颜色蓝色">蓝色</option>
+                        <option value="字体颜色绿色">绿色</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderExcelFormatPanel() {
+    return `
+        <div class="format-presets-section">
+            <div class="format-presets-header">
+                <span>Excel 格式指令</span>
+                <button class="reset-formats-btn" id="resetFormatsBtn">
+                    <i data-lucide="refresh-cw" style="width: 12px; height: 12px;"></i> 重置所有
+                </button>
+            </div>
+            <div class="format-select-grid">
+                <div class="format-select-item">
+                    <label>对齐</label>
+                    <select id="excelAlignSelect" class="format-select">
+                        <option value="">不设置</option>
+                        <option value="居中">居中</option>
+                        <option value="左对齐">左对齐</option>
+                        <option value="右对齐">右对齐</option>
+                    </select>
+                </div>
+                <div class="format-select-item">
+                    <label>字体样式</label>
+                    <select id="excelFontStyleSelect" class="format-select">
+                        <option value="">不设置</option>
+                        <option value="加粗">加粗</option>
+                        <option value="斜体">斜体</option>
+                    </select>
+                </div>
+                <div class="format-select-item">
+                    <label>字体</label>
+                    <select id="excelFontSelect" class="format-select">
+                        <option value="">不设置</option>
+                        <option value="字体宋体">宋体</option>
+                        <option value="字体黑体">黑体</option>
+                        <option value="字体微软雅黑">微软雅黑</option>
+                    </select>
+                </div>
+                <div class="format-select-item">
+                    <label>字号</label>
+                    <select id="excelFontSizeSelect" class="format-select">
+                        <option value="">不设置</option>
+                        <option value="字号10">10</option>
+                        <option value="字号11">11</option>
+                        <option value="字号12">12</option>
+                        <option value="字号14">14</option>
+                    </select>
+                </div>
+                <div class="format-select-item">
+                    <label>颜色</label>
+                    <select id="excelColorSelect" class="format-select">
+                        <option value="">不设置</option>
+                        <option value="字体颜色红色">红色</option>
+                        <option value="字体颜色蓝色">蓝色</option>
+                        <option value="字体颜色绿色">绿色</option>
+                    </select>
+                </div>
+                <div class="format-select-item">
+                    <label>列宽</label>
+                    <input type="number" id="excelColWidth" class="format-number-input" placeholder="如：15" min="5" max="50" step="1">
+                </div>
+                <div class="format-select-item">
+                    <label>行高</label>
+                    <input type="number" id="excelRowHeight" class="format-number-input" placeholder="如：20" min="10" max="100" step="1">
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+
+
 
 // 智能问答 UI
 function renderQaUI(container) {
@@ -1291,4 +1975,144 @@ function renderGraphUI(container) {
     };
     
     setTimeout(loadGraph, 200);
+}
+// 进度条管理类（美化版）
+class ProgressManager {
+    constructor(containerId, options = {}) {
+        this.container = document.getElementById(containerId);
+        this.options = {
+            steps: options.steps || [],
+            title: options.title || '处理中',
+            ...options
+        };
+        this.currentPercent = 0;
+        this.currentStep = 0;
+        this.startTime = null;
+        this.timer = null;
+    }
+    
+    show() {
+        if (!this.container) return;
+        this.container.classList.remove('hidden');
+        this.container.classList.add('loading');
+        this.startTime = Date.now();
+        this.updateTime();
+        this.reset();
+    }
+    
+    hide() {
+        if (!this.container) return;
+        this.container.classList.add('hidden');
+        if (this.timer) clearInterval(this.timer);
+    }
+    
+    reset() {
+        this.currentPercent = 0;
+        this.currentStep = 0;
+        this.update(0, '准备就绪', '等待开始');
+        this.updateSteps(0);
+    }
+    
+    update(percent, status, detail) {
+        if (!this.container) return;
+        
+        this.currentPercent = Math.min(100, Math.max(0, percent));
+        
+        // 更新进度条宽度
+        const fillEl = this.container.querySelector('.progress-bar-fill');
+        if (fillEl) fillEl.style.width = `${this.currentPercent}%`;
+        
+        // 更新百分比显示
+        const percentEl = this.container.querySelector('.progress-percent');
+        if (percentEl) percentEl.textContent = `${Math.floor(this.currentPercent)}%`;
+        
+        // 更新状态文字
+        const statusEl = this.container.querySelector('.progress-status span');
+        if (statusEl && status) statusEl.textContent = status;
+        
+        // 更新详情
+        const detailEl = this.container.querySelector('.progress-step span');
+        if (detailEl && detail) detailEl.textContent = detail;
+        
+        // 根据进度更新步骤指示器
+        const stepIndex = Math.floor(percent / (100 / this.options.steps.length));
+        if (stepIndex !== this.currentStep && stepIndex < this.options.steps.length) {
+            this.currentStep = stepIndex;
+            this.updateSteps(stepIndex);
+        }
+        
+        // 更新进度条颜色
+        if (percent >= 100) {
+            this.container.classList.remove('loading');
+            this.container.classList.add('success');
+        } else {
+            this.container.classList.remove('success', 'error');
+            this.container.classList.add('loading');
+        }
+    }
+    
+    updateSteps(activeIndex) {
+        const stepsContainer = this.container.querySelector('.progress-steps');
+        if (!stepsContainer) return;
+        
+        const steps = stepsContainer.querySelectorAll('.step-item');
+        steps.forEach((step, idx) => {
+            step.classList.remove('active', 'completed');
+            if (idx < activeIndex) {
+                step.classList.add('completed');
+            } else if (idx === activeIndex) {
+                step.classList.add('active');
+            }
+        });
+    }
+    
+    updateTime() {
+        if (this.timer) clearInterval(this.timer);
+        this.timer = setInterval(() => {
+            if (!this.startTime) return;
+            const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            const timeEl = this.container.querySelector('.progress-time');
+            if (timeEl) timeEl.textContent = timeStr;
+        }, 1000);
+    }
+    
+    complete(status = '完成', detail = '处理成功') {
+        this.update(100, status, detail);
+        if (this.timer) clearInterval(this.timer);
+        
+        // 显示成功状态
+        const statusContainer = this.container.querySelector('.progress-status');
+        if (statusContainer) {
+            statusContainer.innerHTML = `
+                <i data-lucide="check-circle"></i>
+                <span>${status}</span>
+            `;
+            lucide.createIcons();
+        }
+        
+        setTimeout(() => this.hide(), 2000);
+    }
+    
+    error(errorMsg) {
+        this.container.classList.remove('loading');
+        this.container.classList.add('error');
+        
+        const statusContainer = this.container.querySelector('.progress-status');
+        if (statusContainer) {
+            statusContainer.innerHTML = `
+                <i data-lucide="alert-circle"></i>
+                <span>处理失败</span>
+            `;
+            lucide.createIcons();
+        }
+        
+        const detailEl = this.container.querySelector('.progress-step span');
+        if (detailEl) detailEl.textContent = errorMsg;
+        
+        setTimeout(() => this.hide(), 3000);
+    }
 }

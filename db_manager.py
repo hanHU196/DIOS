@@ -157,14 +157,16 @@ class DatabaseManager:
             return []
     
     # ========== 填表历史管理 ==========
-    def save_fill_history(self, template, doc_count, data_count, fields, success=True):
+    def save_fill_history(self, template, doc_count, data_count, fields, success=True, template_type='excel'):
         """保存填表历史"""
         if not self.enabled:
+            print("⚠️ 数据库未启用，跳过保存填表历史")
             return None
         
         try:
             record = {
                 'template': template,
+                'template_type': template_type,  # 新增：记录模板类型 (excel/word)
                 'document_count': doc_count,
                 'data_count': data_count,
                 'fields': fields,
@@ -172,10 +174,23 @@ class DatabaseManager:
                 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             result = self.db.fill_history.insert_one(record)
+            print(f"✅ 填表历史已保存: {template}, 数据行数: {data_count}, 类型: {template_type}")
             return result.inserted_id
         except Exception as e:
-            print(f"⚠️ 保存填表历史失败：{e}")
+            print(f"⚠️ 保存填表历史失败: {e}")
             return None
+
+    def get_fill_history(self, limit=20):
+        """获取填表历史"""
+        if not self.enabled:
+            return []
+        
+        try:
+            results = self.db.fill_history.find().sort('timestamp', -1).limit(limit)
+            return [{**r, '_id': str(r['_id'])} for r in results]
+        except Exception as e:
+            print(f"⚠️ 查询填表历史失败: {e}")
+            return []
     
     def get_fill_history(self, limit=20):
         """获取填表历史"""

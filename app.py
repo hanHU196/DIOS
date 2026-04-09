@@ -11,6 +11,10 @@ from document_reader import DocumentReader
 from db_manager import DatabaseManager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
+from instruction_parser import InstructionOperator
+
+DEEPSEEK_API_KEY = "sk-4cbb2ea6e387462383eaeefdbcaa3314"
+instruction_operator = InstructionOperator(api_key=DEEPSEEK_API_KEY)
 
 # 初始化处理器
 processor = DocumentProcessor()
@@ -350,6 +354,9 @@ def api_extract():
 @app.route('/api/fill', methods=['POST'])
 def api_fill():
     """表格智能填写（支持并行处理）"""
+    print("=" * 50)
+    print("🔥 真正执行了填表 API")
+    print("=" * 50)
     try:
         doc_files = request.files.getlist('documents')
         template_file = request.files.get('template')
@@ -389,6 +396,25 @@ def api_fill():
             output_path = os.path.join('outputs', output_filename)
             os.makedirs('outputs', exist_ok=True)
             fill_word_from_excel(template_path, doc_paths[0], output_path)
+            
+            # 保存历史记录（Word 模板填 Excel 数据）
+            try:
+                # 读取 Excel 数据行数
+                df = pd.read_excel(doc_paths[0])
+                data_count = len(df)
+                
+                db.save_fill_history(
+                    template=template_filename,
+                    doc_count=len(doc_paths),
+                    data_count=data_count,
+                    fields=["城市名", "GDP", "人口"],  # 可以动态获取
+                    success=True,
+                    template_type='word'
+                )
+                logger.info(f"✅ 填表历史已保存到数据库（Excel→Word）")
+            except Exception as db_err:
+                logger.warning(f"保存历史失败（不影响结果）: {db_err}")
+            
             return send_file(output_path, as_attachment=True, download_name=output_filename)
         
         # 解析模板字段
@@ -445,7 +471,6 @@ def api_fill():
         logger.info(f"📊 合并后共 {len(all_data)} 行数据")
         
         # ========== 生成输出文件 ==========
-        # 用第一个文档名命名
         first_doc_name = os.path.splitext(os.path.basename(doc_paths[0]))[0]
 
         if is_excel_template:
@@ -460,19 +485,43 @@ def api_fill():
             os.makedirs('outputs', exist_ok=True)
             fill_word_with_data(template_path, all_data, output_path)
         
-        # 保存历史
+        # ========== 保存历史到数据库（增强错误处理） ==========
         try:
-            db.save_fill_history(
-                template=template_filename,
-                doc_count=len(doc_paths),
-                data_count=len(all_data),
-                fields=fields,
-                success=True
-            )
+            # 确保 db 对象存在且已连接
+            if db and db.enabled:
+                result = db.save_fill_history(
+                    template=template_filename,
+                    doc_count=len(doc_paths),
+                    data_count=len(all_data),
+                    fields=fields,
+                    success=True,
+                    template_type='word' if is_word_template else 'excel'
+                )
+                if result:
+                    logger.info(f"✅ 填表历史已保存到数据库，ID: {result}")
+                else:
+                    logger.warning(f"保存历史返回空，可能数据库未启用")
+            else:
+                logger.warning(f"数据库未启用，跳过保存历史")
+        except Exception as db_err:
+            # 数据库保存失败不影响文件返回
+            logger.warning(f"保存历史失败（不影响结果）: {db_err}")
+            import traceback
+            traceback.print_exc()
+        
+        # 清理临时文件
+        for path in doc_paths:
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except:
+                pass
+        try:
+            if os.path.exists(template_path):
+                os.remove(template_path)
         except:
             pass
         
-        # 返回文件
         return send_file(output_path, as_attachment=True, download_name=output_filename)
         
     except Exception as e:
@@ -480,7 +529,7 @@ def api_fill():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
+    
 @app.route('/api/format', methods=['POST'])
 def api_format():
     """文档格式调整"""
@@ -501,6 +550,43 @@ def api_format():
             return send_file(file_path, as_attachment=True, download_name=f'formatted_{filename}')
         else:
             return jsonify({'error': result.get('error', '格式调整失败')}), 400
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/format/batch', methods=['POST'])
+def api_format_batch():
+    """批量文档格式调整"""
+    try:
+        files = request.files.getlist('documents')
+        command = request.form.get('command', '').strip()
+        
+        if not files or not command:
+            return jsonify({'error': '请上传文档并输入指令'}), 400
+        
+        output_files = []
+        
+        for file in files:
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+            
+            # 执行指令（InstructionOperator 会自动识别文件类型）
+            result = instruction_operator.execute(command, file_path)
+            
+            if result.get('success'):
+                output_filename = f'formatted_{filename}'
+                output_path = os.path.join('outputs', output_filename)
+                from shutil import copy2
+                copy2(file_path, output_path)
+                output_files.append(output_path)
+                logger.info(f"✅ 格式调整成功: {filename}")
+            else:
+                logger.error(f"格式调整失败: {filename}, {result.get('error')}")
+            
+            os.remove(file_path)
+        
+        # 返回文件...
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -787,7 +873,7 @@ def get_history_list():
 
 @app.route('/api/history/add', methods=['POST'])
 def add_to_history():
-    """添加文档到历史记录（带去重）"""
+    """添加文档到历史记录（修复文件流耗尽Bug）"""
     try:
         files = request.files.getlist('files')
         if not files:
@@ -798,32 +884,26 @@ def add_to_history():
         
         for file in files:
             filename = secure_filename(file.filename)
-            file_size = file.content_length
+            temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{filename}")
             
-            # 如果没有 content_length，需要先保存再获取大小
-            if not file_size:
-                temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{filename}")
-                file.save(temp_path)
-                file_size = os.path.getsize(temp_path)
-                os.remove(temp_path)
+            # 【修复点1】：统一先保存再读取，绝对不能调用两次 file.save()
+            file.save(temp_path)
+            file_size = os.path.getsize(temp_path)
             
-            # 检查是否已存在（通过文件名和大小）
+            # 检查是否已存在
             exists = db.check_history_exists(file.filename, file_size)
             if exists:
                 skipped.append(file.filename)
+                os.remove(temp_path) # 删除临时文件
                 continue
             
-            # 保存文件到临时目录
-            temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{filename}")
-            file.save(temp_path)
-            
-            # 读取文件内容（用于预览）
+            # 读取文件预览内容
             try:
                 content_preview = reader.read(temp_path)[:200]
             except:
                 content_preview = ""
             
-            # 保存到数据库
+            # 存入数据库
             doc_id = db.save_history_document(
                 filename=filename,
                 original_name=file.filename,
@@ -837,8 +917,7 @@ def add_to_history():
                 added.append({
                     'id': str(doc_id),
                     'name': file.filename,
-                    'size': file_size,
-                    'type': filename.split('.')[-1] if '.' in filename else 'unknown'
+                    'size': file_size
                 })
             
             # 清理临时文件
@@ -847,19 +926,16 @@ def add_to_history():
             except:
                 pass
         
-        return jsonify({
-            'success': True,
-            'message': f'成功添加 {len(added)} 个文档到历史' + (f'，跳过 {len(skipped)} 个重复文档' if skipped else ''),
-            'data': added,
-            'skipped': skipped
-        })
+        return jsonify({'success': True, 'data': added, 'skipped': skipped})
         
     except Exception as e:
         logger.error(f"添加历史失败: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/history/import', methods=['POST'])
 def import_from_history():
-    """从历史记录导入文档到当前工作区"""
+    """导入历史记录（修复：只传ID，由专门接口下载）"""
     try:
         data = request.get_json()
         doc_ids = data.get('ids', [])
@@ -869,36 +945,42 @@ def import_from_history():
         
         imported_files = []
         for doc_id in doc_ids:
-            # 从数据库获取文档
             doc = db.get_history_document_by_id(doc_id)
             if doc:
-                # 创建临时文件供前端下载或使用
-                temp_filename = secure_filename(doc['original_name'])
-                temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"import_{temp_filename}")
-                
-                # 将 base64 内容写回文件
-                import base64
-                file_content = base64.b64decode(doc['file_content'])
-                with open(temp_path, 'wb') as f:
-                    f.write(file_content)
-                
                 imported_files.append({
                     'id': str(doc['_id']),
                     'name': doc['original_name'],
-                    'size': doc['size'],
-                    'temp_path': temp_path
+                    'size': doc['size']
                 })
         
-        return jsonify({
-            'success': True,
-            'message': f'成功导入 {len(imported_files)} 个文档',
-            'files': imported_files
-        })
+        return jsonify({'success': True, 'files': imported_files})
         
     except Exception as e:
         logger.error(f"导入历史失败: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+# 【新增专属通道】：让前端可以从数据库提取真实文件流
+@app.route('/api/history/download/<doc_id>', methods=['GET'])
+def download_history_file(doc_id):
+    try:
+        doc = db.get_history_document_by_id(doc_id)
+        if not doc:
+            return "历史文件未找到", 404
+            
+        import base64
+        import io
+        file_content = base64.b64decode(doc['file_content'])
+        
+        return send_file(
+            io.BytesIO(file_content), 
+            download_name=doc['original_name'], 
+            as_attachment=True
+        )
+    except Exception as e:
+        logger.error(f"提取历史文件流失败: {e}")
+        return "文件损坏或无法读取", 500
+    
 @app.route('/api/history/delete', methods=['POST'])
 def delete_history():
     """删除历史文档"""

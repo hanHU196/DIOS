@@ -182,20 +182,20 @@ class DocumentProcessor:
         
         return results
 
-    # 智能指令操作文档
-    def operate_document(self, file_path, instruction):
-        """执行指令操作文档"""
-        logger.info(f"📝 operate_document 被调用：{file_path}, {instruction}")
+    # # 智能指令操作文档
+    # def operate_document(self, file_path, instruction):
+    #     """执行指令操作文档"""
+    #     logger.info(f"📝 operate_document 被调用：{file_path}, {instruction}")
         
-        # 1. AI理解指令
-        command = parse_instruction(instruction)
-        logger.info(f"🤖 AI理解结果：{command}")
+    #     # 1. AI理解指令
+    #     command = parse_instruction(instruction)
+    #     logger.info(f"🤖 AI理解结果：{command}")
         
-        if command.get('intent') != 'operate':
-            return {'success': False, 'error': '无法理解您的指令'}
+    #     if command.get('intent') != 'operate':
+    #         return {'success': False, 'error': '无法理解您的指令'}
         
-        # 2. 直接调用 operator.execute，不构建 std_command
-        result = self.operator.execute(instruction, file_path)
-        logger.info(f"🔧 执行结果：{result}")
+    #     # 2. 直接调用 operator.execute，不构建 std_command
+    #     result = self.operator.execute(instruction, file_path)
+    #     logger.info(f"🔧 执行结果：{result}")
         
-        return result
+    #     return result

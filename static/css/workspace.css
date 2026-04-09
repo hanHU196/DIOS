@@ -1284,3 +1284,484 @@
     border-radius: 20px;
     margin-left: 4px;
 }
+
+/* ========== 模板文件上传区域 ========== */
+.template-file-area {
+    border: 2px dashed var(--border-focus);
+    border-radius: var(--radius-md);
+    transition: var(--transition);
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.template-file-area:hover {
+    border-color: var(--accent-solid);
+    background-color: var(--accent-soft);
+}
+
+.template-file-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--text-placeholder);
+}
+
+.template-file-placeholder i[data-lucide] {
+    stroke: var(--text-placeholder);
+}
+
+.template-file-placeholder span {
+    font-size: 0.85rem;
+}
+
+.template-file-placeholder small {
+    font-size: 0.7rem;
+}
+
+.template-file-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--accent-soft);
+    border-top: 1px solid var(--border-light);
+}
+
+.template-file-info i[data-lucide] {
+    width: 18px;
+    height: 18px;
+    stroke: var(--success);
+}
+
+.template-file-info span {
+    flex: 1;
+    margin-left: 10px;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.template-remove-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-placeholder);
+    transition: var(--transition);
+}
+
+.template-remove-btn:hover {
+    background: rgba(229, 62, 62, 0.1);
+    color: var(--danger);
+}
+
+.template-remove-btn i[data-lucide] {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+}
+/* ========== 格式调整 - 简洁版样式 ========== */
+
+.format-info-bar {
+    background: var(--bg-subtle);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border-light);
+}
+
+.format-doc-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+}
+
+.format-doc-info i[data-lucide] {
+    width: 16px;
+    height: 16px;
+    stroke: var(--accent-solid);
+}
+
+.format-doc-info strong {
+    color: var(--accent-solid);
+}
+
+.format-doc-names {
+    font-size: 0.7rem;
+    color: var(--text-placeholder);
+    max-width: 300px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.format-warning {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--warning);
+    font-size: 0.75rem;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-light);
+}
+
+.format-warning i[data-lucide] {
+    width: 14px;
+    height: 14px;
+}
+
+/* 应用范围 */
+.format-range-section {
+    background: var(--bg-subtle);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border-light);
+}
+
+.format-range-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+}
+
+.format-range-header i[data-lucide] {
+    width: 14px;
+    height: 14px;
+    stroke: var(--accent-solid);
+}
+
+.format-range-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.range-option {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.range-option input {
+    width: 12px;
+    height: 12px;
+    cursor: pointer;
+}
+
+.range-option:has(input:checked) {
+    color: var(--accent-solid);
+}
+
+.range-input-group {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-light);
+}
+
+.range-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.range-input-wrapper i[data-lucide] {
+    width: 14px;
+    height: 14px;
+    stroke: var(--text-placeholder);
+}
+
+.range-input {
+    flex: 1;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+}
+
+.range-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.range-select {
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+}
+
+/* 格式指令下拉框区域 */
+.format-presets-section {
+    background: var(--bg-subtle);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border-light);
+}
+
+.format-presets-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.format-presets-header i[data-lucide] {
+    width: 14px;
+    height: 14px;
+    stroke: var(--accent-solid);
+}
+
+.format-select-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.format-select-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.format-select-item label {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-placeholder);
+}
+
+.format-select {
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.format-reset-btn {
+    text-align: right;
+}
+
+.reset-formats-btn {
+    background: transparent;
+    border: none;
+    font-size: 0.7rem;
+    color: var(--text-placeholder);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.reset-formats-btn:hover {
+    background: var(--accent-soft);
+    color: var(--accent-solid);
+}
+
+.reset-formats-btn i[data-lucide] {
+    width: 12px;
+    height: 12px;
+}
+
+/* 自定义指令区域 */
+.format-custom-section {
+    background: var(--bg-subtle);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-light);
+}
+
+.format-custom-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.format-custom-header i[data-lucide] {
+    width: 14px;
+    height: 14px;
+    stroke: var(--accent-solid);
+}
+
+.custom-hint {
+    font-size: 0.65rem;
+    font-weight: normal;
+    color: var(--text-placeholder);
+}
+
+.format-custom-input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    resize: vertical;
+    font-family: var(--font-sans);
+}
+
+.format-custom-example {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 0.65rem;
+    color: var(--text-placeholder);
+}
+
+.format-custom-example i[data-lucide] {
+    width: 12px;
+    height: 12px;
+}
+
+/* 指令预览 */
+.format-command-preview {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--accent-soft);
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    font-size: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.format-command-preview i[data-lucide] {
+    width: 14px;
+    height: 14px;
+    stroke: var(--accent-solid);
+}
+
+.format-command-preview code {
+    background: var(--surface-card);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.7rem;
+    color: var(--accent-solid);
+}
+
+/* 结果区域 */
+.format-result {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(16, 185, 129, 0.1);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--success);
+}
+
+.format-result i[data-lucide] {
+    width: 20px;
+    height: 20px;
+    stroke: var(--success);
+}
+
+.download-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent-solid);
+    text-decoration: none;
+    font-size: 0.8rem;
+    margin-top: 8px;
+}
+
+.download-link i[data-lucide] {
+    width: 14px;
+    height: 14px;
+}
+
+/* 文件类型切换标签 */
+.format-type-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border-light);
+    padding-bottom: 8px;
+}
+
+.format-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.format-tab i[data-lucide] {
+    width: 14px;
+    height: 14px;
+}
+
+.format-tab:hover {
+    background: var(--accent-soft);
+    color: var(--accent-solid);
+}
+
+.format-tab.active {
+    background: var(--accent-light);
+    color: var(--accent-solid);
+    border-bottom: 2px solid var(--accent-solid);
+}
+
+/* 数字输入框 */
+.format-number-input {
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    width: 100%;
+}
