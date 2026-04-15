@@ -7,12 +7,26 @@
     <link rel="stylesheet" href="/static/css/common.css">
     <link rel="stylesheet" href="/static/css/home.css">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .logo img {
+            height: 32px;
+            width: auto;
+        }
+    </style>
 </head>
 <body>
     <!-- 导航栏 -->
     <nav class="navbar">
         <div class="nav-container">
-            <a href="/" class="logo">Doc<span>Pilot</span></a>
+            <a href="/" class="logo">
+                <img src="logo.png" alt="DocPilot Logo">
+                <span>Doc</span>Pilot
+            </a>
             <div class="nav-buttons" style="display: flex; gap: 12px; align-items: center;">
                 <button class="theme-toggle" id="themeToggle"><i data-lucide="moon" id="themeIcon"></i></button>
                 <button class="btn-outline" id="loginBtn">登录</button>

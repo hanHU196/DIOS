@@ -8,19 +8,54 @@
     <link rel="stylesheet" href="/static/css/workspace.css">
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .logo img {
+            height: 32px;
+            width: auto;
+        }
+        /* 仅新增：进度条样式 */
+        .progress-container {
+            width: 100%;
+            height: 6px;
+            background: var(--bg-secondary);
+            border-radius: 99px;
+            overflow: hidden;
+            margin: 12px 0;
+            display: none;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--primary);
+            transition: width 0.3s ease;
+            border-radius: 99px;
+        }
+        .progress-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+            display: none;
+        }
+    </style>
 </head>
 <body>
-    <!-- ========== 顶部导航栏（新增） ========== -->
+    <!-- ========== 顶部导航栏 ========== -->
     <nav class="navbar">
         <div class="nav-container">
-            <a href="/" class="logo">Doc<span>Pilot</span></a>
+            <a href="/" class="logo">
+                <img src="logo.png" alt="DocPilot Logo">
+                Doc<span>Pilot</span>
+            </a>
             <div class="nav-links">
                 <a href="/" class="nav-link">首页</a>
                 <a href="#" class="nav-link" id="featuresLink">功能</a>
                 <a href="#" class="nav-link" id="pricingLink">订阅企业版</a>
             </div>
             <div class="nav-buttons">
-                <!-- 主题切换按钮 -->
                 <button class="theme-toggle-nav" id="themeToggleNav">
                     <i data-lucide="moon" id="themeIconNav"></i>
                 </button>
@@ -30,9 +65,7 @@
         </div>
     </nav>
 
-    <!-- 工作区主要内容 -->
     <div class="workspace-container">
-        <!-- 工作区内导航（保留，作为快速返回） -->
         <div class="workspace-header">
             <div class="workspace-title">
                 <i data-lucide="briefcase" style="width: 24px; height: 24px; vertical-align: middle; margin-right: 8px;"></i>
@@ -48,7 +81,13 @@
             </div>
         </div>
         
-        <!-- 统一上传区域 -->
+        <!-- ========== 【新增】文档处理进度条 ========== -->
+        <div class="progress-text" id="progressText">准备就绪</div>
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+
+        <!-- 上传区域 -->
         <div class="upload-section">
             <div class="file-drop-area" id="workspaceDropArea">
                 <input type="file" id="globalFileInput" multiple accept=".txt,.docx,.md,.xlsx,.pdf" class="file-input">
@@ -71,7 +110,7 @@
                 <div id="globalFileListBody" class="file-list"></div>
             </div>
         </div>
-        <!-- 功能选择区域上方添加历史文档按钮 -->
+
         <div class="functions-header">
             <div class="functions-title">选择处理功能</div>
         </div>
@@ -100,7 +139,7 @@
             </div>
         </div>
 
-        <!-- ========== 历史文档侧边栏 ========== -->
+        <!-- 历史侧边栏 -->
         <div class="history-sidebar" id="historySidebar">
             <div class="history-sidebar-header">
                 <div class="history-sidebar-title">
@@ -112,14 +151,10 @@
                     <i data-lucide="x"></i>
                 </button>
             </div>
-            
-            <!-- 搜索框 -->
             <div class="history-search">
                 <i data-lucide="search"></i>
                 <input type="text" id="historySearchInput" placeholder="搜索历史文档...">
             </div>
-            
-            <!-- 历史文档列表 -->
             <div class="history-list" id="historyList">
                 <div class="history-empty">
                     <i data-lucide="archive"></i>
@@ -127,8 +162,6 @@
                     <small>上传文档后会自动保存</small>
                 </div>
             </div>
-            
-            <!-- 底部操作栏 -->
             <div class="history-sidebar-footer" id="historyFooter" style="display: none;">
                 <label class="history-select-all">
                     <input type="checkbox" id="selectAllHistory"> 全选
@@ -146,7 +179,6 @@
             </div>
         </div>
         
-        <!-- 侧边栏遮罩层 -->
         <div class="history-overlay" id="historyOverlay"></div>
 
         <!-- 结果区域 -->
@@ -171,10 +203,30 @@
     <script src="/static/js/modules/fileManager.js"></script>
     <script src="/static/js/workspace.js"></script>
     <script>
-        // 初始化 Lucide 图标
         lucide.createIcons();
         
-        // 绑定导航栏按钮事件
+        // 进度条元素
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        
+        // 显示进度
+        function showProgress(percent, text) {
+            progressContainer.style.display = 'block';
+            progressText.style.display = 'block';
+            progressBar.style.width = percent + '%';
+            progressText.textContent = text;
+        }
+        
+        // 隐藏进度
+        function hideProgress() {
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+                progressText.style.display = 'none';
+            }, 800);
+        }
+        
+        // 绑定导航
         document.getElementById('backToHomeBtn')?.addEventListener('click', () => {
             window.location.href = '/';
         });
@@ -191,6 +243,38 @@
         document.getElementById('pricingLink')?.addEventListener('click', (e) => {
             e.preventDefault();
             alert('订阅信息即将公布');
+        });
+        
+        // 文件上传触发进度
+        document.getElementById('globalFileInput')?.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length > 0) {
+                showProgress(35, '文档上传中...');
+                setTimeout(() => showProgress(100, '上传完成'), 600);
+                setTimeout(hideProgress, 1400);
+            }
+        });
+        
+        // 功能处理触发进度
+        document.querySelectorAll('.function-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const title = card.querySelector('.function-title').textContent;
+                showProgress(40, `正在${title}...`);
+                setTimeout(() => showProgress(70, '生成结果中...'), 500);
+                setTimeout(() => showProgress(100, '处理完成'), 1000);
+                setTimeout(hideProgress, 1800);
+                
+                document.getElementById('resultTitle').innerHTML = `
+                    <i data-lucide="clipboard-list"></i> ${title} 结果
+                `;
+                document.getElementById('resultContent').innerHTML = `
+                    <div style="text-align:center;padding:60px;color:var(--text-placeholder)">
+                        <i data-lucide="check-circle" style="width:48px;height:48px;margin-bottom:16px;color:var(--success);opacity:0.8"></i><br>
+                        ${title} 处理完成
+                    </div>
+                `;
+                lucide.createIcons();
+            });
         });
     </script>
 </body>
