@@ -1157,14 +1157,7 @@ function renderFillUI(container) {
     // 初始化进度条
     initFunctionProgress();
     resetFunctionProgressColor();
-    showFunctionProgress();
 
-    updateFunctionProgress(10, '解析指令中', '正在分析填表字段...', 0);
-    updateFunctionProgress(40, 'AI 提取中', '正在从文档提取数据...', 1);
-    updateFunctionProgress(75, '生成文档', '正在填充模板...', 2);
-
-    // 完成时
-    completeFunctionProgress('生成完成', '文档已生成，正在下载...');
     
     let currentTemplateFile = null;
     

@@ -24,8 +24,8 @@
     <nav class="navbar">
         <div class="nav-container">
             <a href="/" class="logo">
-                <img src="/static/logo.png" alt="DocPilot Logo">
-                <span>Doc</span>Pilot
+                <img src="/static/logo.png" alt="DocPilot">
+                <span>Doc<span>Pilot</span></span>
             </a>
             <div class="nav-buttons" style="display: flex; gap: 12px; align-items: center;">
                 <button class="theme-toggle" id="themeToggle"><i data-lucide="moon" id="themeIcon"></i></button>
@@ -39,7 +39,7 @@
     <section class="hero">
         <div class="hero-badge">✨ AI 驱动的下一代文档平台</div>
         <h1>让文档处理<br>效率提升 10 倍</h1>
-        <p>DocPilot 是你的智能文档秘书，AI 自动提取、智能填表、智能问答、知识图谱，让文档处理变得简单高效。</p>
+        <p>DocPilot 是你的智能文档助手，AI 自动提取、智能填表、智能问答、知识图谱，让文档处理变得简单高效。</p>
         <div class="hero-buttons">
             <button class="btn-primary btn-large" id="heroStartBtn">免费试用</button>
             <button class="btn-outline btn-large" id="demoBtn">▶ 观看演示</button>
@@ -82,13 +82,63 @@
     <!-- CTA -->
     <section class="cta">
         <h2>准备好提升文档处理效率了吗？</h2>
-        <p>立即开始免费试用</p>
-        <button class="btn-primary" id="ctaStartBtn">开始使用 →</button>
+        <button class="btn-primary" id="ctaStartBtn">开始使用</button>
     </section>
 
     <!-- 页脚 -->
     <footer class="footer">
-        <p>© 2026 DocPilot · 智能文档处理平台</p>
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <div class="footer-logo">
+                    <img src="/static/logo.png" alt="DocPilot">
+                    <span>DocPilot</span>
+                </div>
+                <p class="footer-description">AI 驱动的智能文档助手，让文档处理更简单。</p>
+            </div>
+            <div class="footer-column">
+                <h4>产品</h4>
+                <ul>
+                    <li><a href="#">功能介绍</a></li>
+                    <li><a href="#">企业版</a></li>
+                    <li><a href="#">API</a></li>
+                    <li><a href="#">更新日志</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>资源</h4>
+                <ul>
+                    <li><a href="#">帮助中心</a></li>
+                    <li><a href="#">文档</a></li>
+                    <li><a href="#">博客</a></li>
+                    <li><a href="#">社区</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>公司</h4>
+                <ul>
+                    <li><a href="#">关于我们</a></li>
+                    <li><a href="#">招聘</a></li>
+                    <li><a href="#">联系我们</a></li>
+                    <li><a href="#">媒体</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>法律</h4>
+                <ul>
+                    <li><a href="#">隐私政策</a></li>
+                    <li><a href="#">服务条款</a></li>
+                    <li><a href="#">Cookie 政策</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 DocPilot. All rights reserved.</span>
+            <div class="footer-social">
+                <a href="#"><i data-lucide="twitter"></i></a>
+                <a href="#"><i data-lucide="github"></i></a>
+                <a href="#"><i data-lucide="linkedin"></i></a>
+            </div>
+        </div>
     </footer>
 
     <script src="/static/js/common.js"></script>

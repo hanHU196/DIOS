@@ -90,19 +90,32 @@ body {
     height: 70px;
 }
 
+/* ========== 导航栏 Logo 样式 ========== */
 .logo {
-    font-size: 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 22px;
     font-weight: 700;
     letter-spacing: -0.02em;
     color: var(--text-primary);
     text-decoration: none;
 }
 
+.logo img {
+    height: 28px;
+    width: auto;
+}
+
 .logo span {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.logo span span {
     font-weight: 500;
     color: var(--accent-solid);
 }
-
 /* ========== 按钮样式 ========== */
 .btn-primary {
     background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
