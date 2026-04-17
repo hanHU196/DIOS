@@ -1348,6 +1348,10 @@ def get_text_stats(text):
         'reading_time': reading_time
     }
 
+@app.route('/enterprise')
+def enterprise():
+    return render_template('enterprise.html')
+    
 
 
 if __name__ == '__main__':

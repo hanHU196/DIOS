@@ -1,5 +1,83 @@
 // 工作区主逻辑
 let currentFileManager = null;
+// ========== 功能内进度条管理 ==========
+let functionProgress = {
+    container: null,
+    fillBar: null,
+    statusText: null,
+    detailText: null
+};
+
+// 初始化功能内进度条（每次切换功能时调用）
+function initFunctionProgress() {
+    functionProgress.container = document.getElementById('functionProgress');
+    if (functionProgress.container) {
+        functionProgress.fillBar = functionProgress.container.querySelector('.progress-bar-fill');
+        functionProgress.statusText = document.getElementById('progressStatus');
+        functionProgress.detailText = document.getElementById('progressDetail');
+    }
+}
+
+// 显示进度条
+function showFunctionProgress() {
+    if (functionProgress.container) {
+        functionProgress.container.style.display = 'block';
+    }
+}
+
+// 更新进度条
+function updateFunctionProgress(percent, status, detail = '') {
+    if (functionProgress.container) {
+        functionProgress.container.style.display = 'block';
+        if (functionProgress.fillBar) {
+            functionProgress.fillBar.style.width = percent + '%';
+        }
+        if (functionProgress.statusText) {
+            functionProgress.statusText.textContent = status;
+        }
+        if (functionProgress.detailText && detail) {
+            functionProgress.detailText.textContent = detail;
+        }
+    }
+}
+
+// 隐藏进度条
+function hideFunctionProgress(delay = 0) {
+    if (delay > 0) {
+        setTimeout(() => {
+            if (functionProgress.container) {
+                functionProgress.container.style.display = 'none';
+            }
+        }, delay);
+    } else if (functionProgress.container) {
+        functionProgress.container.style.display = 'none';
+    }
+}
+
+// 进度条完成状态
+function completeFunctionProgress(status = '完成', detail = '') {
+    updateFunctionProgress(100, status, detail);
+    if (functionProgress.fillBar) {
+        functionProgress.fillBar.style.background = 'var(--success)';
+    }
+    hideFunctionProgress(2000);
+}
+
+// 进度条错误状态
+function errorFunctionProgress(errorMsg) {
+    updateFunctionProgress(100, '处理失败', errorMsg);
+    if (functionProgress.fillBar) {
+        functionProgress.fillBar.style.background = 'var(--danger)';
+    }
+    hideFunctionProgress(3000);
+}
+
+// 重置进度条颜色
+function resetFunctionProgressColor() {
+    if (functionProgress.fillBar) {
+        functionProgress.fillBar.style.background = 'var(--accent-solid)';
+    }
+}
 let currentFunction = null;
 let currentChart = null;
 
@@ -722,7 +800,7 @@ function loadFunctionUI(func) {
         format: '文档格式调整',
         qa: '智能问答',
         graph: '知识图谱',
-        analyze: '文档深度分析'  // 新增
+        analyze: '文档深度分析'
     };
     resultTitle.innerHTML = `<i data-lucide="${getTitleIcon(func)}" style="width: 18px; height: 18px; margin-right: 6px;"></i> ${titles[func] || '执行结果'}`;
     lucide.createIcons();
@@ -741,7 +819,7 @@ function loadFunctionUI(func) {
         case 'format': renderFormatUI(resultContent); break;
         case 'qa': renderQaUI(resultContent); break;
         case 'graph': renderGraphUI(resultContent); break;
-        case 'analyze': renderAnalyzeUI(resultContent); break;  // 新增
+        case 'analyze': renderAnalyzeUI(resultContent); break;
     }
 }
 
@@ -760,6 +838,17 @@ function getTitleIcon(func) {
 // 智能提取 UI
 function renderExtractUI(container) {
     container.innerHTML = `
+        <!-- 进度条容器 -->
+        <div id="functionProgress" class="progress-container" style="display: none;">
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width: 0%"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+                <span id="progressStatus" style="font-size: 0.8rem; color: var(--text-secondary);">准备就绪</span>
+                <span id="progressDetail" style="font-size: 0.75rem; color: var(--text-placeholder);"></span>
+            </div>
+        </div>
+        
         <div class="form-group">
             <label class="form-label">提取指令</label>
             <input type="text" id="extractCommand" class="input" placeholder="例如：甲方、乙方、合同金额">
@@ -768,12 +857,16 @@ function renderExtractUI(container) {
             </div>
         </div>
         <button class="btn-primary" id="executeExtract">
-            开始提取
+            <i data-lucide="play" style="width: 16px; height: 16px;"></i> 开始提取
         </button>
         <div id="extractResultArea" style="margin-top: 20px;"></div>
         <div id="extractError" class="error-message hidden"></div>
     `;
     lucide.createIcons();
+    
+    // 初始化进度条
+    initFunctionProgress();
+    resetFunctionProgressColor();
     
     document.getElementById('executeExtract').addEventListener('click', async () => {
         const command = document.getElementById('extractCommand').value.trim();
@@ -783,8 +876,13 @@ function renderExtractUI(container) {
         }
         
         const area = document.getElementById('extractResultArea');
-        area.innerHTML = '<div class="progress-container"><div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 50%"></div></div><div><i data-lucide="loader" style="width: 16px; height: 16px; animation: spin 1s linear infinite;"></i> 处理中...</div></div>';
-        lucide.createIcons();
+        area.innerHTML = '';
+        const errorEl = document.getElementById('extractError');
+        errorEl.classList.add('hidden');
+        
+        // 显示进度条
+        resetFunctionProgressColor();
+        updateFunctionProgress(10, '正在准备', '解析提取指令...');
         
         const files = currentFileManager.getFiles();
         const formData = new FormData();
@@ -794,10 +892,14 @@ function renderExtractUI(container) {
         formData.append('command', command);
         
         try {
+            updateFunctionProgress(30, '正在处理', '读取文档内容...');
+            
             const response = await fetch('/api/extract', {
                 method: 'POST',
                 body: formData
             });
+            
+            updateFunctionProgress(70, 'AI 提取中', '正在识别关键信息...');
             
             if (!response.ok) {
                 const error = await response.json();
@@ -808,9 +910,12 @@ function renderExtractUI(container) {
             const fields = data.fields || [];
             const records = data.data || [];
             
+            updateFunctionProgress(90, '生成结果', '渲染数据表格...');
+            
             if (records.length === 0) {
                 area.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--warning);"><i data-lucide="inbox" style="width: 32px; height: 32px; margin-bottom: 12px;"></i><br>未提取到数据，请检查文档内容或指令</div>';
                 lucide.createIcons();
+                completeFunctionProgress('完成', '未提取到数据');
                 return;
             }
             
@@ -827,22 +932,36 @@ function renderExtractUI(container) {
             area.innerHTML = html;
             lucide.createIcons();
             
+            completeFunctionProgress('提取完成', `成功提取 ${records.length} 条记录`);
+            
             document.getElementById('exportTableBtn')?.addEventListener('click', () => {
                 Utils.exportToCSV(records, fields, '提取结果');
             });
             
         } catch (error) {
             console.error('提取失败:', error);
+            errorFunctionProgress(error.message);
             Utils.showError('extractError', error.message);
             area.innerHTML = `<div class="error-message"><i data-lucide="alert-circle" style="width: 16px; height: 16px;"></i> ${error.message}</div>`;
             lucide.createIcons();
         }
     });
 }
+
 // 表格填写 UI（支持 Word 和 Excel 模板，自动识别）
 function renderFillUI(container) {
     
     container.innerHTML = `
+         <!-- 进度条容器 -->
+        <div id="functionProgress" class="progress-container" style="display: none;">
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width: 0%"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+                <span id="progressStatus" style="font-size: 0.8rem; color: var(--text-secondary);">准备就绪</span>
+                <span id="progressDetail" style="font-size: 0.75rem; color: var(--text-placeholder);"></span>
+            </div>
+        </div>
         <div class="form-group">
             <label class="form-label">上传模板文件</label>
             <div class="template-file-area" id="templateFileArea">
@@ -876,6 +995,9 @@ function renderFillUI(container) {
     `;
     
     lucide.createIcons();
+    // 初始化进度条
+    initFunctionProgress();
+    resetFunctionProgressColor();
     
     let currentTemplateFile = null;
     
@@ -981,15 +1103,28 @@ function renderFillUI(container) {
         newExecuteBtn.addEventListener('click', async () => {
             const command = document.getElementById('fillCommand').value.trim();
             
-            if (!command) { Utils.showError('fillError', '请输入字段指令'); return; }
-            if (!currentTemplateFile) { Utils.showError('fillError', '请上传模板文件'); return; }
+            if (!command) { 
+                Utils.showError('fillError', '请输入字段指令'); 
+                return; 
+            }
+            if (!currentTemplateFile) { 
+                Utils.showError('fillError', '请上传模板文件'); 
+                return; 
+            }
             
             const files = currentFileManager.getFiles();
-            if (files.length === 0) { Utils.showError('fillError', '请先上传源文档'); return; }
+            if (files.length === 0) { 
+                Utils.showError('fillError', '请先上传源文档'); 
+                return; 
+            }
             
             const area = document.getElementById('fillResultArea');
-            area.innerHTML = '<div class="progress-container"><div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 50%"></div></div><div><i data-lucide="loader" style="width: 16px; height: 16px; animation: spin 1s linear infinite;"></i> 处理中...</div></div>';
-            lucide.createIcons();
+            const errorEl = document.getElementById('fillError');
+            errorEl.classList.add('hidden');
+            
+            // 重置并显示进度条
+            resetFunctionProgressColor();
+            updateFunctionProgress(20, '正在准备', '解析填表指令...');
             
             const isWordTemplate = currentTemplateFile.name.match(/\.(docx)$/i);
             const templateType = isWordTemplate ? 'word' : 'excel';
@@ -1003,10 +1138,14 @@ function renderFillUI(container) {
             formData.append('template_type', templateType);
             
             try {
+                updateFunctionProgress(50, '处理中', 'AI 正在提取数据...');
+                
                 const response = await fetch('/api/fill', {
                     method: 'POST',
                     body: formData
                 });
+                
+                updateFunctionProgress(80, '生成文档', '正在生成填表结果...');
                 
                 if (!response.ok) {
                     const error = await response.json();
@@ -1016,6 +1155,8 @@ function renderFillUI(container) {
                 const blob = await response.blob();
                 const url = URL.createObjectURL(blob);
                 const extension = isWordTemplate ? '.docx' : '.xlsx';
+                
+                completeFunctionProgress('生成完成', '文档已生成，正在下载...');
                 
                 area.innerHTML = `
                     <div style="text-align: center; padding: 20px;">
@@ -1027,6 +1168,8 @@ function renderFillUI(container) {
                 lucide.createIcons();
                 
             } catch (error) {
+                console.error('填表失败:', error);
+                errorFunctionProgress(error.message);
                 Utils.showError('fillError', error.message);
                 area.innerHTML = `<div class="error-message"><i data-lucide="alert-circle" style="width: 16px; height: 16px;"></i> ${error.message}</div>`;
                 lucide.createIcons();

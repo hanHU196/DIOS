@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocPilot · 企业控制台</title>
+    <!-- 直接复用你现有的设计系统，风格完全统一 -->
+    <link rel="stylesheet" href="/static/css/common.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* 企业控制台专属布局（侧边栏 + 主内容） */
+        .console-wrapper {
+            display: flex;
+            min-height: 100vh;
+            background-color: var(--bg-subtle);
+        }
+        
+        /* 侧边栏——完全使用你的 design tokens */
+        .console-sidebar {
+            width: 260px;
+            background: var(--surface-card);
+            border-right: 1px solid var(--border-light);
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 32px;
+            padding-left: 8px;
+        }
+        .sidebar-logo img { height: 28px; }
+        .sidebar-logo span { font-weight: 700; font-size: 20px; color: var(--text-primary); }
+        .sidebar-logo span span { color: var(--accent-solid); font-weight: 500; }
+        
+        .nav-menu {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            font-weight: 480;
+            transition: var(--transition);
+            cursor: default;
+        }
+        .nav-item i { width: 20px; height: 20px; stroke: currentColor; }
+        .nav-item:hover { background: var(--accent-soft); color: var(--text-primary); }
+        .nav-item.active { background: var(--accent-light); color: var(--accent-solid); }
+        .nav-divider { height: 1px; background: var(--border-light); margin: 16px 0; }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            border-top: 1px solid var(--border-light);
+            margin-top: auto;
+        }
+        .user-avatar {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: 600;
+        }
+        
+        /* 主内容区 */
+        .console-main {
+            flex: 1;
+            padding: 32px 40px;
+            overflow-y: auto;
+        }
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+        }
+        .page-title { font-size: 28px; font-weight: 600; color: var(--text-primary); }
+        
+        /* 卡片样式——沿用你 workspace 的卡片设计 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+        .stat-card {
+            background: var(--surface-card);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-xl);
+            padding: 20px;
+            transition: var(--transition);
+        }
+        .stat-card:hover { box-shadow: var(--shadow-md); }
+        .stat-label { color: var(--text-placeholder); font-size: 13px; margin-bottom: 6px; }
+        .stat-value { font-size: 32px; font-weight: 700; color: var(--text-primary); }
+        
+        .deploy-card {
+            background: var(--surface-card);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-xl);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .deploy-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .deploy-title { font-size: 18px; font-weight: 600; }
+        .badge-success {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--success);
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .permission-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .permission-table th {
+            text-align: left; padding: 12px 8px; color: var(--text-placeholder);
+            font-weight: 500; font-size: 13px; border-bottom: 1px solid var(--border-light);
+        }
+        .permission-table td {
+            padding: 14px 8px; border-bottom: 1px solid var(--border-light);
+            color: var(--text-primary);
+        }
+        .role-badge {
+            background: var(--accent-soft);
+            color: var(--accent-solid);
+            padding: 4px 10px; border-radius: 30px; font-size: 12px; font-weight: 500;
+        }
+        
+        /* 复用你的按钮样式，完全一致 */
+        .btn-premium {
+            background: linear-gradient(135deg, #F59E0B, #D97706);
+            border: none; padding: 10px 24px; border-radius: 40px; cursor: pointer;
+            color: white; font-weight: 500; transition: var(--transition);
+        }
+        .btn-premium:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    </style>
+</head>
+<body class="console-wrapper">
+    <!-- 侧边栏 -->
+    <div class="console-sidebar">
+        <div class="sidebar-logo">
+            <img src="/static/logo.png" alt="DocPilot Logo">
+            <span>Doc<span>Pilot</span></span>
+        </div>
+        <div class="nav-menu">
+            <div class="nav-item active">
+                <i data-lucide="layout-dashboard"></i> 控制台总览
+            </div>
+            <div class="nav-item">
+                <i data-lucide="server"></i> 私有化部署
+            </div>
+            <div class="nav-item">
+                <i data-lucide="shield"></i> 权限与审计
+            </div>
+            <div class="nav-item">
+                <i data-lucide="database"></i> 知识库管理
+            </div>
+            <div class="nav-divider"></div>
+            <div class="nav-item">
+                <i data-lucide="settings"></i> 系统设置
+            </div>
+        </div>
+        <div class="user-info">
+            <div class="user-avatar">A</div>
+            <div>
+                <div style="font-weight: 600; color: var(--text-primary);">Admin</div>
+                <div style="font-size: 12px; color: var(--text-placeholder);">超级管理员</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 主内容区——就是你要录屏的“企业级控制台” -->
+    <div class="console-main">
+        <div class="page-header">
+            <div class="page-title">企业控制台</div>
+            <button class="btn-premium" onclick="alert('演示模式：联系销售升级企业版')">
+                <i data-lucide="crown" style="width: 16px; height: 16px; margin-right: 6px;"></i> 企业尊享版 · 已激活
+            </button>
+        </div>
+        
+        <!-- 4个核心指标卡——呼应你的商业模式：私有化、API调用、用户数、模型状态 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">私有化模型状态</div>
+                <div class="stat-value" style="display: flex; align-items: center; gap: 8px;">
+                    <span style="width: 10px; height: 10px; background: var(--success); border-radius: 50%;"></span> 运行中
+                </div>
+                <div style="margin-top: 8px; color: var(--text-placeholder);">DeepSeek-R1 · 本地部署</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">本月 API 调用</div>
+                <div class="stat-value">1.28M</div>
+                <div style="margin-top: 8px; color: var(--success);">↑ 12% 较上月</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">活跃企业用户</div>
+                <div class="stat-value">24</div>
+                <div style="margin-top: 8px; color: var(--text-placeholder);">含 8 个部门子账号</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">知识库文档</div>
+                <div class="stat-value">1,284</div>
+                <div style="margin-top: 8px; color: var(--text-placeholder);">已向量化 · 实时检索</div>
+            </div>
+        </div>
+        
+        <!-- 核心卖点：私有化部署 + 数据不出域 -->
+        <div class="deploy-card">
+            <div class="deploy-header">
+                <div class="deploy-title">
+                    <i data-lucide="shield-check" style="width: 20px; height: 20px; margin-right: 6px; color: var(--success);"></i>
+                    大模型私有化部署
+                </div>
+                <span class="badge-success">
+                    <i data-lucide="check-circle" style="width: 14px; height: 14px;"></i> 数据不出域 · 安全合规
+                </span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                <div>
+                    <div style="color: var(--text-placeholder); margin-bottom: 16px;">当前接入模型</div>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border-light);">
+                            <span>DeepSeek-R1 (32B)</span> <span style="color: var(--success);">● 主用</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border-light);">
+                            <span>Qwen2.5-14B (本地)</span> <span style="color: var(--text-placeholder);">○ 备用</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0;">
+                            <span>Embedding 模型</span> <span style="color: var(--success);">● BGE-M3 本地</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="background: var(--bg-subtle); border-radius: var(--radius-md); padding: 16px;">
+                    <div style="font-weight: 600; margin-bottom: 8px;">🔒 数据安全承诺</div>
+                    <ul style="color: var(--text-secondary); font-size: 14px; padding-left: 20px;">
+                        <li>✓ 文档向量库 100% 本地存储</li>
+                        <li>✓ 大模型推理流量不出内网</li>
+                        <li>✓ 符合等保三级审计要求</li>
+                        <li>✓ 支持国密 SM4 加密传输</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 多角色权限管理表格 -->
+        <div class="deploy-card" style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div class="deploy-title">
+                    <i data-lucide="users" style="width: 18px; height: 18px; margin-right: 6px;"></i>
+                    多角色权限管理
+                </div>
+                <button class="btn-outline" style="padding: 6px 16px;">
+                    新建角色
+                </button>
+            </div>
+            <table class="permission-table">
+                <thead>
+                    <tr><th>角色名称</th><th>成员数</th><th>文档权限</th><th>API 权限</th><th>审计日志</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="role-badge" style="background: var(--accent-solid); color: white;">超级管理员</span></td>
+                        <td>2 人</td><td>全部读写</td><td>完全访问</td><td>✓ 完整查看</td>
+                    </tr>
+                    <tr>
+                        <td><span class="role-badge">业务审计员</span></td>
+                        <td>5 人</td><td>仅读取</td><td>只读</td><td>✓ 完整查看</td>
+                    </tr>
+                    <tr>
+                        <td><span class="role-badge">文档操作员</span></td>
+                        <td>12 人</td><td>上传/填表</td><td>调用受限</td><td>仅查看本人</td>
+                    </tr>
+                    <tr>
+                        <td><span class="role-badge">API 集成角色</span></td>
+                        <td>—</td><td>无前端权限</td><td>按 Token 限流</td><td>API 调用日志</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div style="margin-top: 20px; padding: 12px; background: var(--accent-soft); border-radius: var(--radius-md); display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="shield" style="width: 16px;"></i>
+                <span style="font-size: 14px;">支持对接企业 LDAP / SSO 单点登录，权限策略实时生效。</span>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/js/common.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+</html>

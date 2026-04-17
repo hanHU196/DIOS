@@ -45,8 +45,9 @@ class InstructionOperator:
             return self._execute_word(command, file_path)
         else:
             return self._execute_excel(command, file_path)
+    
     def _execute_word(self, command, file_path):
-        """执行 Word 操作（支持合并后的属性）"""
+        """执行 Word 操作（支持合并后的属性和数组类型的 action）"""
         try:
             from docx.shared import Pt, RGBColor
             from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -55,9 +56,15 @@ class InstructionOperator:
             action = command.get('action')
             position = command.get('position')
             target = command.get('target', 'all')
-            size = command.get('size')
-            font_name = command.get('font', '')
-            font_color = command.get('color', '')
+            size = command.get('font_size') or command.get('size')
+            font_name = command.get('font_name') or command.get('font', '')
+            font_color = command.get('font_color') or command.get('color', '')
+            
+            # ========== 处理 action 可能是数组的情况 ==========
+            if isinstance(action, list):
+                actions = action
+            else:
+                actions = [action] if action else []
             
             # 颜色映射
             color_map = {
@@ -76,37 +83,47 @@ class InstructionOperator:
             else:
                 paragraphs = doc.paragraphs
             
-            # 应用格式
+            # 应用格式到每个段落
             for para in paragraphs:
                 # 字体样式应用到每个 run
                 for run in para.runs:
-                    if action == 'bold' or command.get('bold'):
-                        run.bold = True
-                    if action == 'italic' or command.get('italic'):
-                        run.italic = True
-                    if action == 'underline' or command.get('underline'):
-                        run.underline = True
+                    # 遍历所有 action
+                    for act in actions:
+                        if act == 'bold':
+                            run.bold = True
+                        elif act == 'italic':
+                            run.italic = True
+                        elif act == 'underline':
+                            run.underline = True
+                    # 字体
                     if font_name:
                         run.font.name = font_name
+                    # 字号
                     if size:
-                        run.font.size = Pt(size)
-                    if font_color and font_color in color_map:
-                        run.font.color.rgb = color_map[font_color]
+                        run.font.size = Pt(int(size))
+                    # 颜色
+                    if font_color and font_color.lower() in color_map:
+                        run.font.color.rgb = color_map[font_color.lower()]
                 
-                # 对齐
-                if action == 'center':
-                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                elif action == 'left':
-                    para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                elif action == 'right':
-                    para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                # 对齐（段落级别）
+                for act in actions:
+                    if act == 'center':
+                        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    elif act == 'left':
+                        para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    elif act == 'right':
+                        para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
             
             doc.save(file_path)
+            logger.info(f"✅ 格式调整完成: action={actions}, font={font_name}, size={size}, color={font_color}")
             return {'success': True, 'message': '格式调整完成'}
             
         except Exception as e:
             logger.error(f"Word 操作失败: {e}")
+            import traceback
+            traceback.print_exc()
             return {'success': False, 'error': str(e)}
+    
     def _execute_excel(self, command, file_path):
         """执行 Excel 操作"""
         try:
