@@ -975,7 +975,7 @@ function renderExtractUI(container) {
             </div>
         </div>
         <button class="btn-primary" id="executeExtract">
-            <i data-lucide="play" style="width: 16px; height: 16px;"></i> 开始提取
+            开始提取
         </button>
         <div id="extractResultArea" style="margin-top: 20px;"></div>
         <div id="extractError" class="error-message hidden"></div>
@@ -1967,7 +1967,7 @@ function renderQaUI(container) {
         <div style="display: flex; gap: 12px;">
             <input type="text" id="qaInput" class="input" placeholder="输入问题..." onkeypress="if(event.key==='Enter')document.getElementById('sendQa').click()">
             <button class="btn-primary" id="sendQa">
-                <i data-lucide="send" style="width: 16px; height: 16px;"></i> 发送
+                发送
             </button>
         </div>
         <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
@@ -2708,7 +2708,8 @@ function getAnalyzeTabName(type) {
         entities: '实体识别',
         sentiment: '情感分析',
         topics: '主题分类',
-        stats: '统计信息'
+        stats: '统计信息',
+        visualization: '数据视图'
     };
     return names[type] || type;
 }
