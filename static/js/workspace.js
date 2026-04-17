@@ -1,11 +1,14 @@
 // 工作区主逻辑
 let currentFileManager = null;
-// ========== 功能内进度条管理 ==========
+// ========== 功能内进度条管理（美化版） ==========
 let functionProgress = {
     container: null,
     fillBar: null,
+    percentText: null,
     statusText: null,
-    detailText: null
+    detailText: null,
+    stepsContainer: null,
+    stepItems: []
 };
 
 // 初始化功能内进度条（每次切换功能时调用）
@@ -13,11 +16,30 @@ function initFunctionProgress() {
     functionProgress.container = document.getElementById('functionProgress');
     if (functionProgress.container) {
         functionProgress.fillBar = functionProgress.container.querySelector('.progress-bar-fill');
+        functionProgress.percentText = document.getElementById('progressPercent');
         functionProgress.statusText = document.getElementById('progressStatus');
         functionProgress.detailText = document.getElementById('progressDetail');
+        functionProgress.stepsContainer = document.getElementById('progressSteps');
+        
+        // 获取所有步骤项
+        if (functionProgress.stepsContainer) {
+            functionProgress.stepItems = functionProgress.stepsContainer.querySelectorAll('.progress-step-item');
+        }
+        
+        // 调试日志
+        console.log('进度条初始化完成', {
+            container: !!functionProgress.container,
+            fillBar: !!functionProgress.fillBar,
+            percentText: !!functionProgress.percentText,
+            statusText: !!functionProgress.statusText,
+            detailText: !!functionProgress.detailText,
+            stepsContainer: !!functionProgress.stepsContainer,
+            stepItemsCount: functionProgress.stepItems?.length || 0
+        });
+    } else {
+        console.error('找不到 #functionProgress 容器');
     }
 }
-
 // 显示进度条
 function showFunctionProgress() {
     if (functionProgress.container) {
@@ -25,22 +47,54 @@ function showFunctionProgress() {
     }
 }
 
-// 更新进度条
-function updateFunctionProgress(percent, status, detail = '') {
-    if (functionProgress.container) {
-        functionProgress.container.style.display = 'block';
-        if (functionProgress.fillBar) {
-            functionProgress.fillBar.style.width = percent + '%';
-        }
-        if (functionProgress.statusText) {
-            functionProgress.statusText.textContent = status;
-        }
-        if (functionProgress.detailText && detail) {
+// 更新进度条（支持步骤状态）
+function updateFunctionProgress(percent, status, detail = '', stepIndex = -1) {
+    if (!functionProgress.container) {
+        console.error('进度条容器不存在');
+        return;
+    }
+    
+    functionProgress.container.style.display = 'block';
+    
+    // 更新百分比
+    if (functionProgress.fillBar) {
+        functionProgress.fillBar.style.width = percent + '%';
+    }
+    if (functionProgress.percentText) {
+        functionProgress.percentText.textContent = percent + '%';
+    }
+    
+    // 更新状态文字
+    if (functionProgress.statusText) {
+        functionProgress.statusText.textContent = status;
+    }
+    
+    // 更新详情
+    if (functionProgress.detailText) {
+        if (detail) {
             functionProgress.detailText.textContent = detail;
+            functionProgress.detailText.style.display = 'block';
+        } else {
+            functionProgress.detailText.style.display = 'none';
         }
     }
+    
+    // 更新步骤指示器
+    if (stepIndex >= 0 && functionProgress.stepItems) {
+        functionProgress.stepItems.forEach((step, idx) => {
+            step.classList.remove('active', 'completed', 'pending');
+            if (idx < stepIndex) {
+                step.classList.add('completed');
+            } else if (idx === stepIndex) {
+                step.classList.add('active');
+            } else {
+                step.classList.add('pending');
+            }
+        });
+    }
+    
+    console.log(`进度更新: ${percent}% - ${status}`);
 }
-
 // 隐藏进度条
 function hideFunctionProgress(delay = 0) {
     if (delay > 0) {
@@ -55,12 +109,18 @@ function hideFunctionProgress(delay = 0) {
 }
 
 // 进度条完成状态
-function completeFunctionProgress(status = '完成', detail = '') {
-    updateFunctionProgress(100, status, detail);
+function completeFunctionProgress(status = '处理完成', detail = '') {
+    updateFunctionProgress(100, status, detail, 3);
     if (functionProgress.fillBar) {
         functionProgress.fillBar.style.background = 'var(--success)';
     }
-    hideFunctionProgress(2000);
+    if (functionProgress.stepItems) {
+        functionProgress.stepItems.forEach(step => {
+            step.classList.remove('active', 'pending');
+            step.classList.add('completed');
+        });
+    }
+    hideFunctionProgress(2500);
 }
 
 // 进度条错误状态
@@ -69,15 +129,48 @@ function errorFunctionProgress(errorMsg) {
     if (functionProgress.fillBar) {
         functionProgress.fillBar.style.background = 'var(--danger)';
     }
-    hideFunctionProgress(3000);
+    if (functionProgress.statusText) {
+        functionProgress.statusText.style.color = 'var(--danger)';
+    }
+    hideFunctionProgress(3500);
 }
-
+// 重置进度条
+function resetFunctionProgress() {
+    if (functionProgress.fillBar) {
+        functionProgress.fillBar.style.background = 'var(--accent-solid)';
+        functionProgress.fillBar.style.width = '0%';
+    }
+    if (functionProgress.percentText) {
+        functionProgress.percentText.textContent = '0%';
+    }
+    if (functionProgress.statusText) {
+        functionProgress.statusText.style.color = 'var(--text-secondary)';
+        functionProgress.statusText.textContent = '准备就绪';
+    }
+    if (functionProgress.detailText) {
+        functionProgress.detailText.textContent = '';
+        functionProgress.detailText.style.display = 'none';
+    }
+    if (functionProgress.stepItems) {
+        functionProgress.stepItems.forEach((step) => {
+            step.classList.remove('active', 'completed', 'pending');
+            step.classList.add('pending');
+        });
+    }
+    if (functionProgress.container) {
+        functionProgress.container.style.display = 'none';
+    }
+}
 // 重置进度条颜色
 function resetFunctionProgressColor() {
     if (functionProgress.fillBar) {
         functionProgress.fillBar.style.background = 'var(--accent-solid)';
     }
+    if (functionProgress.statusText) {
+        functionProgress.statusText.style.color = 'var(--text-secondary)';
+    }
 }
+
 let currentFunction = null;
 let currentChart = null;
 
@@ -838,14 +931,39 @@ function getTitleIcon(func) {
 // 智能提取 UI
 function renderExtractUI(container) {
     container.innerHTML = `
-        <!-- 进度条容器 -->
-        <div id="functionProgress" class="progress-container" style="display: none;">
-            <div class="progress-bar-bg">
-                <div class="progress-bar-fill" style="width: 0%"></div>
+           <!-- 美化版进度条 -->
+        <div id="functionProgress" class="progress-container-enhanced" style="display: none;">
+            <div class="progress-header">
+                <div class="progress-title">
+                    <i data-lucide="loader" class="progress-icon spin"></i>
+                    <span id="progressStatus">准备就绪</span>
+                </div>
+                <div class="progress-percent-wrapper">
+                    <span id="progressPercent">0%</span>
+                </div>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-top: 8px;">
-                <span id="progressStatus" style="font-size: 0.8rem; color: var(--text-secondary);">准备就绪</span>
-                <span id="progressDetail" style="font-size: 0.75rem; color: var(--text-placeholder);"></span>
+            
+            <div class="progress-bar-wrapper">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div id="progressDetail" class="progress-detail" style="display: none;"></div>
+            
+            <div id="progressSteps" class="progress-steps">
+                <div class="progress-step-item">
+                    <span class="step-icon">1</span>
+                    <span class="step-label">解析指令</span>
+                </div>
+                <div class="progress-step-item">
+                    <span class="step-icon">2</span>
+                    <span class="step-label">AI 提取</span>
+                </div>
+                <div class="progress-step-item">
+                    <span class="step-icon">3</span>
+                    <span class="step-label">生成结果</span>
+                </div>
             </div>
         </div>
         
@@ -881,8 +999,23 @@ function renderExtractUI(container) {
         errorEl.classList.add('hidden');
         
         // 显示进度条
-        resetFunctionProgressColor();
-        updateFunctionProgress(10, '正在准备', '解析提取指令...');
+    resetFunctionProgressColor();
+    showFunctionProgress();
+
+    // 使用 stepIndex 参数（0, 1, 2 分别对应三个步骤）
+    updateFunctionProgress(10, '解析指令中', '正在识别提取字段...', 0);
+
+    // 在 fetch 之前
+    updateFunctionProgress(30, '读取文档', `正在处理 ${files.length} 个文档...`, 0);
+
+    // fetch 请求时
+    updateFunctionProgress(60, 'AI 提取中', '正在识别关键信息...', 1);
+
+    // 处理完成时
+    updateFunctionProgress(85, '生成结果', `已提取 ${records.length} 条记录`, 2);
+
+    // 完成时
+    completeFunctionProgress('提取完成', `成功提取 ${records.length} 条记录`);
         
         const files = currentFileManager.getFiles();
         const formData = new FormData();
@@ -952,16 +1085,42 @@ function renderExtractUI(container) {
 function renderFillUI(container) {
     
     container.innerHTML = `
-         <!-- 进度条容器 -->
-        <div id="functionProgress" class="progress-container" style="display: none;">
-            <div class="progress-bar-bg">
-                <div class="progress-bar-fill" style="width: 0%"></div>
+    <!-- 美化版进度条 -->
+        <div id="functionProgress" class="progress-container-enhanced" style="display: none;">
+            <div class="progress-header">
+                <div class="progress-title">
+                    <i data-lucide="loader" class="progress-icon spin"></i>
+                    <span id="progressStatus">准备就绪</span>
+                </div>
+                <div class="progress-percent-wrapper">
+                    <span id="progressPercent">0%</span>
+                </div>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-top: 8px;">
-                <span id="progressStatus" style="font-size: 0.8rem; color: var(--text-secondary);">准备就绪</span>
-                <span id="progressDetail" style="font-size: 0.75rem; color: var(--text-placeholder);"></span>
+            
+            <div class="progress-bar-wrapper">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div id="progressDetail" class="progress-detail" style="display: none;"></div>
+            
+            <div id="progressSteps" class="progress-steps">
+                <div class="progress-step-item">
+                    <span class="step-icon">1</span>
+                    <span class="step-label">解析指令</span>
+                </div>
+                <div class="progress-step-item">
+                    <span class="step-icon">2</span>
+                    <span class="step-label">AI 提取</span>
+                </div>
+                <div class="progress-step-item">
+                    <span class="step-icon">3</span>
+                    <span class="step-label">生成文档</span>
+                </div>
             </div>
         </div>
+
         <div class="form-group">
             <label class="form-label">上传模板文件</label>
             <div class="template-file-area" id="templateFileArea">
@@ -998,6 +1157,14 @@ function renderFillUI(container) {
     // 初始化进度条
     initFunctionProgress();
     resetFunctionProgressColor();
+    showFunctionProgress();
+
+    updateFunctionProgress(10, '解析指令中', '正在分析填表字段...', 0);
+    updateFunctionProgress(40, 'AI 提取中', '正在从文档提取数据...', 1);
+    updateFunctionProgress(75, '生成文档', '正在填充模板...', 2);
+
+    // 完成时
+    completeFunctionProgress('生成完成', '文档已生成，正在下载...');
     
     let currentTemplateFile = null;
     
@@ -1794,8 +1961,6 @@ function renderExcelFormatPanel() {
 }
 
 
-
-
 // 智能问答 UI
 function renderQaUI(container) {
     const fileCount = currentFileManager.getFiles().length;
@@ -1807,32 +1972,77 @@ function renderQaUI(container) {
             </div>
         </div>
         <div style="display: flex; gap: 12px;">
-            <input type="text" id="qaInput" class="input" placeholder="输入问题...">
+            <input type="text" id="qaInput" class="input" placeholder="输入问题..." onkeypress="if(event.key==='Enter')document.getElementById('sendQa').click()">
             <button class="btn-primary" id="sendQa">
-                发送
+                <i data-lucide="send" style="width: 16px; height: 16px;"></i> 发送
             </button>
         </div>
         <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
             <button class="btn-secondary quick-q" style="padding: 6px 12px;"><i data-lucide="file-text" style="width: 12px; height: 12px;"></i> 总结文档内容</button>
-            <button class="btn-secondary quick-q" style="padding: 6px 12px;"><i data-lucide="list" style="width: 12px; height: 12px;"></i> 有哪些关键实体？</button>
+            <button class="btn-secondary quick-q" style="padding: 6px 12px;"><i data-lucide="list" style="width: 12px; height: 12px;"></i> 有哪些关键信息？</button>
             <button class="btn-secondary quick-q" style="padding: 6px 12px;"><i data-lucide="lightbulb" style="width: 12px; height: 12px;"></i> 文档的主要观点是什么？</button>
         </div>
     `;
     lucide.createIcons();
     
     const chatMessages = document.getElementById('chatMessages');
-    const addMessage = (role, content) => {
+    const qaInput = document.getElementById('qaInput');
+    const sendBtn = document.getElementById('sendQa');
+    
+    // 添加消息到聊天区域
+    const addMessage = (role, content, isLoading = false) => {
         const msg = document.createElement('div');
         msg.className = `message ${role}`;
         const icon = role === 'user' ? 'user' : 'bot';
-        msg.innerHTML = `<div class="message-avatar"><i data-lucide="${icon}" style="width: 18px; height: 18px;"></i></div><div class="message-content">${content}</div>`;
+        
+        if (isLoading) {
+            msg.id = 'loadingMessage';
+            msg.innerHTML = `
+                <div class="message-avatar"><i data-lucide="${icon}" style="width: 18px; height: 18px;"></i></div>
+                <div class="message-content" style="display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="loader" class="spin" style="width: 18px; height: 18px; stroke: var(--accent-solid);"></i>
+                    <span>正在思考中...</span>
+                </div>
+            `;
+        } else {
+            msg.innerHTML = `
+                <div class="message-avatar"><i data-lucide="${icon}" style="width: 18px; height: 18px;"></i></div>
+                <div class="message-content">${escapeHtml(content)}</div>
+            `;
+        }
+        
         chatMessages.appendChild(msg);
         chatMessages.scrollTop = chatMessages.scrollHeight;
         lucide.createIcons();
+        return msg;
     };
     
+    // 移除加载消息
+    const removeLoadingMessage = () => {
+        const loadingMsg = document.getElementById('loadingMessage');
+        if (loadingMsg) {
+            loadingMsg.remove();
+        }
+    };
+    
+    // 发送问题
     const askQuestion = async (question) => {
+        if (!question.trim()) return;
+        
+        // 禁用输入框和发送按钮
+        qaInput.disabled = true;
+        sendBtn.disabled = true;
+        sendBtn.style.opacity = '0.6';
+        sendBtn.style.cursor = 'not-allowed';
+        
+        // 添加用户消息
         addMessage('user', question);
+        
+        // 添加加载消息
+        addMessage('assistant', '', true);
+        
+        // 清空输入框
+        qaInput.value = '';
         
         const files = currentFileManager.getFiles();
         const formData = new FormData();
@@ -1852,27 +2062,45 @@ function renderQaUI(container) {
             }
             
             const data = await response.json();
+            
+            // 移除加载消息
+            removeLoadingMessage();
+            
+            // 添加 AI 回复
             addMessage('assistant', data.answer);
             
         } catch (error) {
+            // 移除加载消息
+            removeLoadingMessage();
+            
+            // 显示错误消息
             addMessage('assistant', `抱歉，服务暂时不可用：${error.message}`);
+        } finally {
+            // 恢复输入框和发送按钮
+            qaInput.disabled = false;
+            sendBtn.disabled = false;
+            sendBtn.style.opacity = '';
+            sendBtn.style.cursor = '';
+            
+            // 聚焦输入框
+            qaInput.focus();
         }
     };
     
-    document.getElementById('sendQa').addEventListener('click', () => {
-        const q = document.getElementById('qaInput').value.trim();
-        if (!q) return;
-        askQuestion(q);
-        document.getElementById('qaInput').value = '';
+    // 绑定发送按钮
+    sendBtn.addEventListener('click', () => {
+        askQuestion(qaInput.value);
     });
     
+    // 绑定快捷问题
     document.querySelectorAll('.quick-q').forEach(btn => {
         btn.addEventListener('click', () => {
-            askQuestion(btn.textContent.trim());
+            const question = btn.textContent.trim();
+            qaInput.value = question;
+            askQuestion(question);
         });
     });
 }
-
 // 进度条管理类（美化版）
 class ProgressManager {
     constructor(containerId, options = {}) {
@@ -2204,40 +2432,7 @@ function renderAnalyzeUI(container) {
         });
     }
     
-    // 进度条函数
-    function updateProgress(percent, status, detail) {
-        const progressArea = document.getElementById('analyzeProgressArea');
-        if (!progressArea) return;
-        if (percent === 0) {
-            progressArea.innerHTML = '';
-            return;
-        }
-        progressArea.innerHTML = `
-            <div class="progress-container loading">
-                <div class="progress-header">
-                    <div class="progress-title">
-                        <i data-lucide="loader"></i>
-                        <span>文档分析中</span>
-                    </div>
-                    <div class="progress-stats">
-                        <span class="progress-percent">${percent}%</span>
-                    </div>
-                </div>
-                <div class="progress-bar-wrapper">
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar-fill" style="width: ${percent}%"></div>
-                    </div>
-                </div>
-                <div class="progress-details">
-                    <div class="progress-status">${status}</div>
-                    <div class="progress-step">${detail}</div>
-                </div>
-            </div>
-        `;
-        lucide.createIcons();
-    }
-    
-    // 执行分析（只分析第一个文档，保持原结果展示）
+    // 执行分析
     const analyzeBtn = document.getElementById('executeAnalyze');
     if (analyzeBtn) {
         const newAnalyzeBtn = analyzeBtn.cloneNode(true);
@@ -2261,72 +2456,182 @@ function renderAnalyzeUI(container) {
             }
             
             const resultArea = document.getElementById('analyzeResultArea');
-            resultArea.innerHTML = '';
+            const progressArea = document.getElementById('analyzeProgressArea');
+            const errorEl = document.getElementById('analyzeError');
             
-            // 基础分析：只取第一个文档
+            resultArea.innerHTML = '';
+            errorEl.classList.add('hidden');
+            
             const targetFile = files[0];
             
-            updateProgress(20, '正在上传文档', `分析文档: ${targetFile.name}`);
+            // ========== 显示进度条 ==========
+            progressArea.innerHTML = `
+                <div class="progress-container-enhanced" id="analyzeProgress">
+                    <div class="progress-header">
+                        <div class="progress-title">
+                            <i data-lucide="loader" class="progress-icon spin"></i>
+                            <span id="analyzeProgressStatus">准备分析</span>
+                        </div>
+                        <div class="progress-percent-wrapper">
+                            <span id="analyzeProgressPercent">0%</span>
+                        </div>
+                    </div>
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="analyzeProgressFill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div id="analyzeProgressDetail" class="progress-detail" style="display: none;"></div>
+                    <div class="progress-steps">
+                        <div class="progress-step-item" id="analyzeStep1">
+                            <span class="step-icon">1</span>
+                            <span class="step-label">读取文档</span>
+                        </div>
+                        <div class="progress-step-item" id="analyzeStep2">
+                            <span class="step-icon">2</span>
+                            <span class="step-label">AI 分析</span>
+                        </div>
+                        <div class="progress-step-item" id="analyzeStep3">
+                            <span class="step-icon">3</span>
+                            <span class="step-label">生成报告</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
             
-            const formData = new FormData();
-            formData.append('documents', targetFile);
-            formData.append('analyze_types', JSON.stringify(analyzeTypes));
-            
-            try {
-                updateProgress(50, 'AI 分析中', '正在处理文档内容...');
+            // 进度条辅助函数
+            function updateAnalyzeProgress(percent, status, detail = '', stepIndex = -1) {
+                const fill = document.getElementById('analyzeProgressFill');
+                const percentEl = document.getElementById('analyzeProgressPercent');
+                const statusEl = document.getElementById('analyzeProgressStatus');
+                const detailEl = document.getElementById('analyzeProgressDetail');
                 
-                const response = await fetch('/api/analyze', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || '分析失败');
+                if (fill) fill.style.width = percent + '%';
+                if (percentEl) percentEl.textContent = percent + '%';
+                if (statusEl) statusEl.textContent = status;
+                if (detailEl) {
+                    if (detail) {
+                        detailEl.textContent = detail;
+                        detailEl.style.display = 'block';
+                    } else {
+                        detailEl.style.display = 'none';
+                    }
                 }
                 
-                updateProgress(100, '分析完成', '结果已生成');
+                ['analyzeStep1', 'analyzeStep2', 'analyzeStep3'].forEach((id, idx) => {
+                    const step = document.getElementById(id);
+                    if (step) {
+                        step.classList.remove('active', 'completed');
+                        if (idx < stepIndex) step.classList.add('completed');
+                        else if (idx === stepIndex) step.classList.add('active');
+                    }
+                });
+            }
+            
+            function completeAnalyzeProgress(status, detail) {
+                updateAnalyzeProgress(100, status, detail, 3);
+                setTimeout(() => { if (progressArea) progressArea.innerHTML = ''; }, 2000);
+            }
+            
+            // 开始处理
+            updateAnalyzeProgress(20, '读取文档', `正在读取: ${targetFile.name}`, 0);
+            
+            try {
+                // ========== 同时获取分析数据和提取数据 ==========
+                updateAnalyzeProgress(40, 'AI 分析中', '正在分析文档内容和提取关键数据...', 1);
                 
-                const data = await response.json();
+                // 并行请求：文档分析 + 智能提取
+                const formData1 = new FormData();
+                formData1.append('documents', targetFile);
+                formData1.append('analyze_types', JSON.stringify(analyzeTypes));
                 
-                setTimeout(() => {
-                    updateProgress(0, '', '');
-                    // 使用原来的 renderAnalyzeResult 函数
-                    renderAnalyzeResult(data, [targetFile], analyzeTypes, resultArea);
-                }, 500);
+                // 智能提取：尝试提取常见的结构化字段
+                const formData2 = new FormData();
+                formData2.append('documents', targetFile);
+                formData2.append('command', '提取城市、GDP总量、人口、人均GDP、财政收入、财政支出');
+                
+                const [analyzeResponse, extractResponse] = await Promise.all([
+                    fetch('/api/analyze', { method: 'POST', body: formData1 }),
+                    fetch('/api/extract', { method: 'POST', body: formData2 })
+                ]);
+                
+                updateAnalyzeProgress(75, '处理结果', '正在整理数据...', 1);
+                
+                let analyzeData = {};
+                let extractData = { fields: [], data: [] };
+                
+                if (analyzeResponse.ok) {
+                    analyzeData = await analyzeResponse.json();
+                }
+                
+                if (extractResponse.ok) {
+                    extractData = await extractResponse.json();
+                }
+                
+                updateAnalyzeProgress(90, '生成报告', '正在渲染结果...', 2);
+                
+                // 合并数据：将提取的数据注入到分析结果中
+                const combinedData = {
+                    ...analyzeData,
+                    extractedData: extractData.data || [],
+                    extractedFields: extractData.fields || []
+                };
+                
+                completeAnalyzeProgress('分析完成', '报告已生成');
+                // 保存到全局变量以便调试
+                window.lastAnalyzeData = combinedData;
+                console.log('合并后的数据:', combinedData);
+                console.log('提取的数据:', combinedData.extractedData);
+                console.log('提取的字段:', combinedData.extractedFields);
+                // 渲染结果，传入合并后的数据
+                renderAnalyzeResult(combinedData, [targetFile], analyzeTypes, resultArea);
                 
             } catch (error) {
-                updateProgress(0, '', '');
+                console.error('分析失败:', error);
+                progressArea.innerHTML = '';
                 Utils.showError('analyzeError', error.message);
             }
         });
-    }
+}
 }
 
 // 渲染分析结果
 function renderAnalyzeResult(data, files, analyzeTypes, container) {
+    // 判断是否有数据可以可视化
+    const hasData = data.data && data.data.length > 0;
+    const hasKeywords = data.keywords && data.keywords.length > 0;
+    const showVisualization = hasData || hasKeywords;
+    
+    // 构建标签页列表
+    const allTabs = [...analyzeTypes];
+    if (showVisualization) {
+        allTabs.push('visualization');
+    }
+    
     let html = `
         <div class="analyze-result-container">
             <div class="analyze-result-header">
+                <i data-lucide="check-circle" style="width: 20px; height: 20px;"></i>
                 <span>分析完成！共分析 ${files.length} 个文档</span>
             </div>
             <div class="analyze-result-tabs">
-                ${analyzeTypes.map(type => `
-                    <button class="analyze-tab ${type === analyzeTypes[0] ? 'active' : ''}" data-tab="${type}">
+                ${allTabs.map(type => `
+                    <button class="analyze-tab ${type === allTabs[0] ? 'active' : ''}" data-tab="${type}">
                         ${getAnalyzeTabIcon(type)} ${getAnalyzeTabName(type)}
                     </button>
                 `).join('')}
             </div>
             <div class="analyze-result-content">
-                ${analyzeTypes.map(type => `
-                    <div id="analyze-tab-${type}" class="analyze-tab-content ${type === analyzeTypes[0] ? 'active' : ''}">
-                        ${renderAnalyzeTabContent(data, type)}
+                ${allTabs.map(type => `
+                    <div id="analyze-tab-${type}" class="analyze-tab-content ${type === allTabs[0] ? 'active' : ''}">
+                        ${type === 'visualization' ? renderVisualizationContent(data) : renderAnalyzeTabContent(data, type)}
                     </div>
                 `).join('')}
             </div>
             <div class="analyze-result-footer">
                 <button class="btn-secondary" id="exportAnalyzeResult">
-                    <i data-lucide="download"></i> 导出分析报告
+                    <i data-lucide="download" style="width: 14px; height: 14px;"></i> 导出分析报告
                 </button>
             </div>
         </div>
@@ -2339,14 +2644,40 @@ function renderAnalyzeResult(data, files, analyzeTypes, container) {
     document.querySelectorAll('.analyze-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             const tabId = tab.dataset.tab;
+            
+            // 切换标签激活状态
             document.querySelectorAll('.analyze-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
+            
+            // 切换内容显示
             document.querySelectorAll('.analyze-tab-content').forEach(content => {
                 content.classList.remove('active');
             });
             document.getElementById(`analyze-tab-${tabId}`).classList.add('active');
+            
+            // ========== 关键：如果切换到可视化标签，渲染智能图表 ==========
+            if (tabId === 'visualization') {
+                setTimeout(() => {
+                    if (typeof initVisualizationEvents === 'function') {
+                        initVisualizationEvents(data);
+                    } else {
+                        console.warn('initVisualizationEvents 函数未定义');
+                    }
+                    lucide.createIcons();
+                }, 100);
+            }
         });
     });
+    
+    // 如果默认显示的就是可视化标签，立即渲染图表
+    if (allTabs[0] === 'visualization') {
+        setTimeout(() => {
+            if (typeof initVisualizationEvents === 'function') {
+                initVisualizationEvents(data);
+            }
+            lucide.createIcons();
+        }, 100);
+    }
     
     // 导出结果
     document.getElementById('exportAnalyzeResult')?.addEventListener('click', () => {
@@ -2524,4 +2855,759 @@ function escapeHtml(text) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+// ========== 智能可视化系统 ==========
+
+// 数据分析器 - 兼容多种数据格式
+class DataAnalyzer {
+    constructor(data) {
+        this.data = data;
+        this.rawData = data;
+        
+        // 尝试多种方式获取结构化数据
+        this.records = this.extractRecords(data);
+        this.fields = this.extractFields(data);
+        this.stats = data.stats || {};
+        this.keywords = data.keywords || [];
+    }
+    
+    // 从各种格式中提取记录
+    extractRecords(data) {
+        // ========== 优先使用智能提取的数据 ==========
+        if (data.extractedData && Array.isArray(data.extractedData) && data.extractedData.length > 0) {
+            console.log('使用智能提取的数据:', data.extractedData.length, '条');
+            return data.extractedData;
+        }
+        
+        // 格式1: 标准格式 { fields: [], data: [] }
+        if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+            return data.data;
+        }
+        
+        // 格式2: 直接从表格提取的数据（可能是数组）
+        if (Array.isArray(data) && data.length > 0) {
+            return data;
+        }
+        
+        // 格式3: 从 stats 构建虚拟数据（降级方案）
+        if (data.stats && Object.keys(data.stats).length > 0) {
+            return [{
+                name: '字符数',
+                value: data.stats.char_count || 0
+            }, {
+                name: '词数',
+                value: data.stats.word_count || 0
+            }, {
+                name: '段落数',
+                value: data.stats.paragraph_count || 0
+            }, {
+                name: '阅读时长(分钟)',
+                value: data.stats.reading_time || 0
+            }];
+        }
+        
+        // 格式4: 从关键词构建数据（降级方案）
+        if (data.keywords && Array.isArray(data.keywords) && data.keywords.length > 0) {
+            return data.keywords.slice(0, 10).map((keyword, index) => ({
+                name: typeof keyword === 'string' ? keyword : keyword.name || keyword,
+                value: Math.floor(100 - index * 5)
+            }));
+        }
+        
+        return [];
+    }
+
+    extractFields(data) {
+        // 优先使用提取的字段
+        if (data.extractedFields && Array.isArray(data.extractedFields)) {
+            return data.extractedFields;
+        }
+        
+        if (data.fields && Array.isArray(data.fields)) {
+            return data.fields;
+        }
+        
+        if (this.records.length > 0) {
+            return Object.keys(this.records[0]);
+        }
+        
+        return [];
+    }
+
+    hasNumericFields() {
+        return this.getNumericFields().length > 0;
+    }
+    
+    getNumericFields() {
+        if (this.records.length === 0) return [];
+        const sample = this.records[0];
+        return Object.keys(sample).filter(key => {
+            const val = sample[key];
+            return typeof val === 'number' || (!isNaN(parseFloat(val)) && isFinite(val));
+        });
+    }
+    
+    getCategoryFields() {
+        if (this.records.length === 0) return [];
+        const sample = this.records[0];
+        const numericFields = this.getNumericFields();
+        return Object.keys(sample).filter(key => !numericFields.includes(key));
+    }
+    
+    analyzeDataType() {
+        const recordCount = this.records.length;
+        const numericFields = this.getNumericFields();
+        const categoryFields = this.getCategoryFields();
+        
+        console.log('数据分析结果:', { recordCount, numericFields, categoryFields });
+        
+        if (recordCount === 0) {
+            return { 
+                type: 'empty', 
+                recommendation: '暂无结构化数据', 
+                charts: [], 
+                preferred: null 
+            };
+        }
+        
+        // 有分类字段和数值字段
+        if (categoryFields.length > 0 && numericFields.length > 0) {
+            return {
+                type: 'comparison',
+                recommendation: '数据对比',
+                charts: ['bar', 'pie', 'table'],
+                preferred: 'bar',
+                categoryField: categoryFields[0],
+                valueFields: numericFields
+            };
+        }
+        
+        // 只有数值字段
+        if (numericFields.length > 0) {
+            return {
+                type: 'numeric',
+                recommendation: '数值分析',
+                charts: ['bar', 'pie', 'table'],
+                preferred: 'bar',
+                categoryField: 'name',
+                valueFields: numericFields
+            };
+        }
+        
+        // 只有分类字段 - 可以统计频次
+        if (categoryFields.length > 0) {
+            // 转换为频次数据
+            const freqMap = {};
+            this.records.forEach(r => {
+                const val = String(r[categoryFields[0]] || '未知');
+                freqMap[val] = (freqMap[val] || 0) + 1;
+            });
+            
+            // 保存频次数据供后续使用
+            this.frequencyData = Object.entries(freqMap).map(([name, value]) => ({ name, value }));
+            
+            return {
+                type: 'frequency',
+                recommendation: '频次统计',
+                charts: ['bar', 'pie', 'table'],
+                preferred: 'bar',
+                categoryField: categoryFields[0]
+            };
+        }
+        
+        return { 
+            type: 'table', 
+            recommendation: '数据表格', 
+            charts: ['table'], 
+            preferred: 'table' 
+        };
+    }
+}
+function renderVisualizationContent(data) {
+    console.log('渲染可视化，原始数据:', data);
+    
+    const analyzer = new DataAnalyzer(data);
+    const analysis = analyzer.analyzeDataType();
+    const recordCount = analyzer.records.length;
+    const numericFields = analyzer.getNumericFields();
+    const categoryFields = analyzer.getCategoryFields();
+    
+    console.log('分析结果:', { analysis, recordCount, numericFields, categoryFields });
+    
+    if (analysis.type === 'empty' || recordCount === 0) {
+        // 检查是否有统计信息可以展示
+        if (data.stats && Object.keys(data.stats).length > 0) {
+            return renderStatsOnlyView(data.stats);
+        }
+        
+        // 检查是否有摘要
+        if (data.summary) {
+            return `
+                <div class="visualization-message">
+                    <i data-lucide="file-text" style="width: 40px; height: 40px; opacity: 0.5;"></i>
+                    <p>文档摘要</p>
+                    <div class="summary-box">${escapeHtml(String(data.summary))}</div>
+                    <small style="margin-top: 16px; display: block; color: var(--text-placeholder);">
+                        需要结构化数据才能生成图表。请使用"智能提取"功能先提取表格数据。
+                    </small>
+                </div>
+            `;
+        }
+        
+        return `
+            <div class="visualization-empty">
+                <i data-lucide="database" style="width: 48px; height: 48px; opacity: 0.4;"></i>
+                <p>暂无可可视化的结构化数据</p>
+                <small>请使用"智能提取"功能提取表格数据，或选择包含数值的文档进行分析</small>
+            </div>
+        `;
+    }
+    
+    const availableCharts = analysis.charts || ['bar', 'table'];
+    
+    return `
+        <div class="smart-visualization">
+            <div class="data-summary">
+                <div class="summary-item">
+                    <span class="summary-label">推荐视图</span>
+                    <span class="summary-value">${analysis.recommendation}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">记录数</span>
+                    <span class="summary-value">${recordCount} 条</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">数值字段</span>
+                    <span class="summary-value">${numericFields.length > 0 ? numericFields.slice(0, 3).join('、') : '无'}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">分类字段</span>
+                    <span class="summary-value">${categoryFields.length > 0 ? categoryFields.slice(0, 3).join('、') : '无'}</span>
+                </div>
+            </div>
+            
+            <div class="chart-selector">
+                <span class="selector-label">
+                    <i data-lucide="chart-bar" style="width: 14px; height: 14px;"></i>
+                    图表类型：
+                </span>
+                <div class="chart-type-buttons">
+                    ${availableCharts.includes('bar') ? '<button class="chart-type-btn active" data-chart="bar"><i data-lucide="bar-chart-3"></i> 柱状图</button>' : ''}
+                    ${availableCharts.includes('pie') ? '<button class="chart-type-btn" data-chart="pie"><i data-lucide="pie-chart"></i> 饼图</button>' : ''}
+                    ${availableCharts.includes('line') ? '<button class="chart-type-btn" data-chart="line"><i data-lucide="trending-up"></i> 折线图</button>' : ''}
+                    <button class="chart-type-btn ${!availableCharts.includes('bar') ? 'active' : ''}" data-chart="table"><i data-lucide="table"></i> 数据表</button>
+                </div>
+            </div>
+            
+            <div class="chart-main-container">
+                <div id="mainChart" class="main-chart" style="height: 350px;"></div>
+                <div id="chartTable" class="chart-table-container" style="display: none;"></div>
+            </div>
+            
+            <div class="visualization-tip">
+                <i data-lucide="info" style="width: 14px; height: 14px;"></i>
+                <span>根据数据特征，推荐使用${analysis.recommendation}视图。</span>
+            </div>
+        </div>
+    `;
+}
+
+// 只显示统计信息的视图
+function renderStatsOnlyView(stats) {
+    return `
+        <div class="stats-only-view">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">${stats.char_count || 0}</div>
+                    <div class="stat-label">字符数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.word_count || 0}</div>
+                    <div class="stat-label">词数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.paragraph_count || 0}</div>
+                    <div class="stat-label">段落数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.reading_time || 0}</div>
+                    <div class="stat-label">阅读时长(分钟)</div>
+                </div>
+            </div>
+            <div class="visualization-tip" style="margin-top: 20px;">
+                <i data-lucide="info" style="width: 14px; height: 14px;"></i>
+                <span>这是文档的基础统计信息。如需更多可视化，请使用"智能提取"功能提取表格数据。</span>
+            </div>
+        </div>
+    `;
+}
+function renderSmartChart(data, chartType = 'bar') {
+    console.log('渲染图表，类型:', chartType);
+    console.log('传入数据:', data);
+    
+    const analyzer = new DataAnalyzer(data);
+    console.log('分析器记录数:', analyzer.records.length);
+    console.log('分析器字段:', analyzer.fields);
+    console.log('数值字段:', analyzer.getNumericFields());
+    console.log('分类字段:', analyzer.getCategoryFields());
+    
+    const chartDom = document.getElementById('mainChart');
+    const tableDom = document.getElementById('chartTable');
+    
+    if (!chartDom) {
+        console.error('找不到图表容器 #mainChart');
+        return;
+    }
+    
+    if (typeof echarts === 'undefined') {
+        console.error('ECharts 未加载');
+        chartDom.innerHTML = '<p style="text-align:center;padding:40px;">图表库加载失败</p>';
+        return;
+    }
+    
+    // 隐藏表格，显示图表
+    if (tableDom) tableDom.style.display = 'none';
+    chartDom.style.display = 'block';
+    
+    const chart = echarts.init(chartDom);
+    let option = {};
+    
+    if (chartType === 'bar') {
+        option = generateBarChartOption(analyzer);
+    } else if (chartType === 'pie') {
+        option = generatePieChartOption(analyzer);
+    } else if (chartType === 'line') {
+        option = generateLineChartOption(analyzer);
+    } else if (chartType === 'table') {
+        chartDom.style.display = 'none';
+        if (tableDom) {
+            tableDom.style.display = 'block';
+            renderDataTable(analyzer, tableDom);
+        }
+        return;
+    }
+    
+    console.log('图表配置:', option);
+    chart.setOption(option);
+    
+    // 响应式
+    window.addEventListener('resize', () => chart.resize());
+}
+// 生成柱状图配置
+function generateBarChartOption(analyzer) {
+    const records = analyzer.records;
+    
+    console.log('生成柱状图，记录数:', records.length);
+    console.log('记录样例:', records.slice(0, 3));
+    
+    if (records.length === 0) {
+        return {
+            title: { text: '暂无数据', left: 'center', top: 'center' }
+        };
+    }
+    
+    // 智能选择字段
+    let categoryField = analyzer.getCategoryFields()[0];
+    let valueField = analyzer.getNumericFields()[0];
+    
+    // 如果没有分类字段，使用第一个字段
+    if (!categoryField && Object.keys(records[0]).length > 0) {
+        categoryField = Object.keys(records[0])[0];
+    }
+    
+    // 如果没有数值字段，尝试将字符串转换为数值
+    if (!valueField) {
+        for (const key of Object.keys(records[0])) {
+            const val = records[0][key];
+            if (typeof val === 'string' && !isNaN(parseFloat(val))) {
+                valueField = key;
+                break;
+            }
+        }
+    }
+    
+    // 如果还是没有，使用第二个字段
+    if (!valueField && Object.keys(records[0]).length > 1) {
+        valueField = Object.keys(records[0])[1];
+    }
+    
+    console.log('选择的分类字段:', categoryField);
+    console.log('选择的数值字段:', valueField);
+    
+    if (!categoryField || !valueField) {
+        return {
+            title: { text: '无法识别数据字段', left: 'center', top: 'center' }
+        };
+    }
+    
+    // 提取数据
+    const categories = [];
+    const values = [];
+    
+    records.slice(0, 15).forEach(r => {
+        let catValue = r[categoryField] || '未知';
+        // 截断过长的分类名
+        if (catValue.length > 15) {
+            catValue = catValue.substring(0, 12) + '...';
+        }
+        categories.push(String(catValue));
+        
+        let numValue = r[valueField];
+        if (typeof numValue === 'string') {
+            // 尝试提取数字（处理带单位的字符串如 "56708.71亿元"）
+            const match = String(numValue).match(/(\d+\.?\d*)/);
+            numValue = match ? parseFloat(match[1]) : parseFloat(numValue) || 0;
+        }
+        values.push(Number(numValue) || 0);
+    });
+    
+    console.log('分类数据:', categories);
+    console.log('数值数据:', values);
+    
+    // 过滤掉数值全为0的情况
+    const hasData = values.some(v => v > 0);
+    
+    return {
+        title: {
+            text: `${valueField} 对比分析`,
+            left: 'center',
+            top: 5,
+            textStyle: { fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }
+        },
+        tooltip: { 
+            trigger: 'axis',
+            formatter: function(params) {
+                return params[0].name + '<br/>' + 
+                       params[0].marker + ' ' + valueField + ': ' + 
+                       params[0].value.toLocaleString();
+            }
+        },
+        grid: { 
+            left: '15%', 
+            right: '5%', 
+            bottom: hasData ? '20%' : '10%', 
+            top: '18%' 
+        },
+        xAxis: {
+            type: 'category',
+            data: categories,
+            axisLabel: { 
+                rotate: categories.length > 5 ? 45 : 0, 
+                color: 'var(--text-secondary)', 
+                fontSize: 11,
+                interval: 0
+            },
+            axisLine: { lineStyle: { color: 'var(--border-light)' } }
+        },
+        yAxis: {
+            type: 'value',
+            name: valueField,
+            axisLabel: { 
+                color: 'var(--text-secondary)',
+                formatter: function(value) {
+                    if (value >= 100000000) return (value / 100000000).toFixed(1) + '亿';
+                    if (value >= 10000) return (value / 10000).toFixed(0) + '万';
+                    return value;
+                }
+            },
+            axisLine: { lineStyle: { color: 'var(--border-light)' } },
+            splitLine: { lineStyle: { color: 'var(--border-light)', type: 'dashed' } }
+        },
+        series: [{
+            name: valueField,
+            type: 'bar',
+            data: values,
+            itemStyle: {
+                // 使用设计系统的渐变色
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: '#2C3E66' },      // var(--accent-solid)
+                    { offset: 0.5, color: '#4A6A8A' },    // var(--gradient-end)
+                    { offset: 1, color: '#6B8CBF' }       // 更浅的蓝色
+                ]),
+                borderRadius: [4, 4, 0, 0]
+            },
+            label: {
+                show: hasData && values.length <= 10,
+                position: 'top',
+                color: '#5B6E8C',  // var(--text-secondary)
+                fontSize: 11,
+                formatter: function(params) {
+                    const val = params.value;
+                    if (val >= 100000000) return (val / 100000000).toFixed(1) + '亿';
+                    if (val >= 10000) return (val / 10000).toFixed(0) + '万';
+                    return val.toLocaleString();
+                }
+            }
+        }]
+    };
+}
+function generatePieChartOption(analyzer) {
+    const records = analyzer.records;
+    
+    if (records.length === 0) {
+        return { title: { text: '暂无数据', left: 'center', top: 'center' } };
+    }
+    
+    let categoryField = analyzer.getCategoryFields()[0];
+    let valueField = analyzer.getNumericFields()[0];
+    
+    if (!categoryField && Object.keys(records[0]).length > 0) {
+        categoryField = Object.keys(records[0])[0];
+    }
+    if (!valueField && Object.keys(records[0]).length > 1) {
+        valueField = Object.keys(records[0])[1];
+    }
+    
+    const pieData = records.slice(0, 10).map(r => {
+        let name = String(r[categoryField] || '未知');
+        if (name.length > 15) name = name.substring(0, 12) + '...';
+        
+        let numValue = r[valueField];
+        if (typeof numValue === 'string') {
+            const match = String(numValue).match(/(\d+\.?\d*)/);
+            numValue = match ? parseFloat(match[1]) : parseFloat(numValue) || 0;
+        }
+        
+        return {
+            name: name,
+            value: Number(numValue) || 0
+        };
+    }).filter(d => d.value > 0);
+    
+    console.log('饼图数据:', pieData);
+    
+    if (pieData.length === 0) {
+        return { title: { text: '无有效数值数据', left: 'center', top: 'center' } };
+    }
+    
+    return {
+        // 标题颜色
+        title: {
+            textStyle: { 
+                fontSize: 14, 
+                fontWeight: 500, 
+                color: '#1A2C3E'  // var(--text-primary)
+            }
+        },
+
+        // X轴
+        xAxis: {
+            axisLabel: { 
+                color: '#5B6E8C',  // var(--text-secondary)
+                fontSize: 11
+            },
+            axisLine: { 
+                lineStyle: { color: '#EDF2F7' }  // var(--border-light)
+            },
+            axisTick: {
+                lineStyle: { color: '#EDF2F7' }
+            }
+        },
+
+        // Y轴
+        yAxis: {
+            axisLabel: { 
+                color: '#5B6E8C'  // var(--text-secondary)
+            },
+            axisLine: { 
+                lineStyle: { color: '#EDF2F7' }  // var(--border-light)
+            },
+            splitLine: { 
+                lineStyle: { 
+                    color: '#EDF2F7',  // var(--border-light)
+                    type: 'dashed' 
+                } 
+            }
+        },
+
+        // 提示框
+        tooltip: {
+            backgroundColor: '#FFFFFF',
+            borderColor: '#EDF2F7',
+            textStyle: { color: '#1A2C3E' }
+        },
+
+        // 图例
+        legend: {
+            textStyle: { 
+                color: '#5B6E8C'  // var(--text-secondary)
+            }
+        },
+        series: [{
+            type: 'pie',
+            radius: ['40%', '70%'],
+            center: ['55%', '55%'],
+            data: pieData,
+            itemStyle: {
+                borderRadius: 6,
+                borderColor: 'var(--surface-card)',
+                borderWidth: 2,
+                // 使用设计系统配色
+                color: function(params) {
+                    const colors = [
+                        '#2C3E66',  // 深蓝
+                        '#4A6A8A',  // 中蓝
+                        '#6B8CBF',  // 浅蓝
+                        '#8BA3C8',  // 更浅蓝
+                        '#A3B3CC',  // 灰蓝
+                        '#5B6E8C',  // 文字灰蓝
+                        '#1F2F4D',  // 深色
+                        '#819BBB',  // 亮蓝
+                    ];
+                    return colors[params.dataIndex % colors.length];
+                }
+            },
+            label: {
+                color: '#5B6E8C',  // var(--text-secondary)
+                fontSize: 11,
+                formatter: '{b}: {d}%'
+            },
+            emphasis: {
+                label: { 
+                    show: true, 
+                    fontWeight: 'bold',
+                    color: '#2C3E66'  // var(--accent-solid)
+                }
+            }
+        }]
+    };
+}
+// 生成折线图配置
+function generateLineChartOption(analyzer) {
+    const records = analyzer.records;
+    const dateField = analyzer.findDateField() || analyzer.getCategoryFields()[0] || 'date';
+    const valueField = analyzer.getNumericFields()[0] || 'value';
+    
+    const sortedRecords = [...records].sort((a, b) => {
+        return String(a[dateField] || '').localeCompare(String(b[dateField] || ''));
+    });
+    
+    const categories = sortedRecords.map(r => String(r[dateField] || '未知'));
+    const values = sortedRecords.map(r => {
+        const val = r[valueField];
+        return typeof val === 'number' ? val : parseFloat(val) || 0;
+    });
+    
+    return {
+       // 标题颜色
+        title: {
+            textStyle: { 
+                fontSize: 14, 
+                fontWeight: 500, 
+                color: '#1A2C3E'  // var(--text-primary)
+            }
+        },
+
+        // X轴
+        xAxis: {
+            axisLabel: { 
+                color: '#5B6E8C',  // var(--text-secondary)
+                fontSize: 11
+            },
+            axisLine: { 
+                lineStyle: { color: '#EDF2F7' }  // var(--border-light)
+            },
+            axisTick: {
+                lineStyle: { color: '#EDF2F7' }
+            }
+        },
+
+        // Y轴
+        yAxis: {
+            axisLabel: { 
+                color: '#5B6E8C'  // var(--text-secondary)
+            },
+            axisLine: { 
+                lineStyle: { color: '#EDF2F7' }  // var(--border-light)
+            },
+            splitLine: { 
+                lineStyle: { 
+                    color: '#EDF2F7',  // var(--border-light)
+                    type: 'dashed' 
+                } 
+            }
+        },
+
+        // 提示框
+        tooltip: {
+            backgroundColor: '#FFFFFF',
+            borderColor: '#EDF2F7',
+            textStyle: { color: '#1A2C3E' }
+        },
+
+        // 图例
+        legend: {
+            textStyle: { 
+                color: '#5B6E8C'  // var(--text-secondary)
+            }
+        },
+        series: [{
+            name: valueField,
+            type: 'line',
+            data: values,
+            smooth: true,
+            lineStyle: { 
+                color: '#2C3E66',  // var(--accent-solid)
+                width: 3 
+            },
+            areaStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(44, 62, 102, 0.25)' },  // #2C3E66
+                    { offset: 1, color: 'rgba(44, 62, 102, 0.05)' }
+                ])
+            },
+            symbol: 'circle',
+            symbolSize: 8,
+            itemStyle: {
+                color: '#2C3E66',
+                borderColor: '#FFFFFF',
+                borderWidth: 2
+            }
+        }]
+    };
+}
+
+// 渲染数据表格
+function renderDataTable(analyzer, container) {
+    const records = analyzer.records;
+    const columns = Object.keys(records[0] || {});
+    
+    let html = '<table class="data-table"><thead><tr>';
+    columns.forEach(col => { html += `<th>${col}</th>`; });
+    html += '</tr></thead><tbody>';
+    
+    records.slice(0, 50).forEach(record => {
+        html += '<tr>';
+        columns.forEach(col => {
+            const val = record[col];
+            html += `<td>${val !== undefined && val !== null ? val : ''}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    
+    if (records.length > 50) {
+        html += `<div style="text-align: center; padding: 12px; color: var(--text-placeholder);">共 ${records.length} 条记录，仅显示前 50 条</div>`;
+    }
+    
+    container.innerHTML = html;
+}
+
+// ========== 初始化可视化事件 ==========
+function initVisualizationEvents(data) {
+    // 图表类型切换
+    document.querySelectorAll('.chart-type-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.chart-type-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const chartType = btn.dataset.chart;
+            renderSmartChart(data, chartType);
+        });
+    });
+    
+    // 默认渲染推荐图表
+    const analyzer = new DataAnalyzer(data);
+    const analysis = analyzer.analyzeDataType();
+    renderSmartChart(data, analysis.preferred || 'bar');
 }

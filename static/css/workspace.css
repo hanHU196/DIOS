@@ -446,7 +446,7 @@
 
 .function-title {
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: 1rem;
 }
 
 /* ========== 结果区域 ========== */
@@ -834,7 +834,7 @@
 }
 
 .functions-title {
-    font-size: 0.9rem;
+    font-size: 1.2rem;
     font-weight: 600;
     color: var(--text-secondary);
 }
@@ -2461,16 +2461,335 @@
     border: 1px solid var(--border-light);
 }
 
-#functionProgress .progress-bar-bg {
-    height: 6px;
-    background: var(--border-light);
-    border-radius: 10px;
-    overflow: hidden;
+/* ========== 美化版进度条样式 ========== */
+.progress-container-enhanced {
+    background: var(--surface-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xl);
+    padding: 20px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
 }
 
-#functionProgress .progress-bar-fill {
-    height: 100%;
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.progress-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.progress-icon {
+    width: 18px;
+    height: 18px;
+    stroke: var(--accent-solid);
+}
+
+.progress-icon.spin {
+    animation: spin 1.5s linear infinite;
+}
+
+.progress-percent-wrapper {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--accent-solid);
+}
+
+.progress-bar-wrapper {
+    margin-bottom: 16px;
+}
+
+.progress-detail {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    background: var(--bg-subtle);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--accent-solid);
+}
+
+/* 步骤指示器 */
+.progress-steps {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 16px;
+}
+
+.progress-step-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    position: relative;
+}
+
+.progress-step-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 14px;
+    left: 55%;
+    width: 90%;
+    height: 2px;
+    background: var(--border-light);
+    z-index: 0;
+}
+
+.progress-step-item.completed:not(:last-child)::after {
+    background: var(--success);
+}
+
+.progress-step-item.active:not(:last-child)::after {
+    background: linear-gradient(90deg, var(--success) 0%, var(--border-light) 100%);
+}
+
+.progress-step-item .step-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--bg-subtle);
+    border: 2px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-placeholder);
+    z-index: 1;
+    transition: all 0.3s ease;
+}
+
+.progress-step-item.active .step-icon {
     background: var(--accent-solid);
-    border-radius: 10px;
-    transition: width 0.3s ease;
+    border-color: var(--accent-solid);
+    color: white;
+    box-shadow: 0 0 0 4px rgba(44, 62, 102, 0.15);
+}
+
+.progress-step-item.completed .step-icon {
+    background: var(--success);
+    border-color: var(--success);
+    color: white;
+}
+
+.progress-step-item .step-label {
+    font-size: 0.75rem;
+    color: var(--text-placeholder);
+    transition: color 0.3s ease;
+}
+
+.progress-step-item.active .step-label {
+    color: var(--accent-solid);
+    font-weight: 500;
+}
+
+.progress-step-item.completed .step-label {
+    color: var(--success);
+}
+
+/* 兼容旧版 #functionProgress */
+#functionProgress {
+    margin-bottom: 20px;
+}
+
+#functionProgress.progress-container-enhanced {
+    background: var(--surface-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xl);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+}
+
+/* 旋转动画 */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.spin {
+    animation: spin 1.5s linear infinite;
+}
+.logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+.logo img {
+            height: 32px;
+            width: auto;
+        }
+
+/* ========== 智能可视化样式 ========== */
+.smart-visualization {
+    padding: 10px 0;
+}
+
+.data-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 32px;
+    padding: 16px;
+    background: var(--bg-subtle);
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+    border: 1px solid var(--border-light);
+}
+
+.data-summary .summary-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.data-summary .summary-label {
+    font-size: 0.75rem;
+    color: var(--text-placeholder);
+}
+
+.data-summary .summary-value {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.chart-selector {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.chart-selector .selector-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.chart-type-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.chart-type-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-light);
+    border-radius: 30px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.chart-type-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+.chart-type-btn:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent-solid);
+    color: var(--accent-solid);
+}
+
+.chart-type-btn.active {
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: white;
+}
+
+.chart-main-container {
+    background: var(--bg-subtle);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    border: 1px solid var(--border-light);
+}
+
+.main-chart {
+    width: 100%;
+    min-height: 350px;
+}
+
+.chart-table-container {
+    max-height: 400px;
+    overflow: auto;
+}
+
+.visualization-tip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 10px 14px;
+    background: var(--accent-soft);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.visualization-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-placeholder);
+}
+
+.visualization-empty p {
+    margin-top: 16px;
+    font-size: 0.9rem;
+}
+
+.visualization-empty small {
+    font-size: 0.75rem;
+}
+
+/* ========== 可视化消息样式 ========== */
+.visualization-message {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.visualization-message p {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin: 16px 0 12px;
+}
+
+.summary-box {
+    background: var(--bg-subtle);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    text-align: left;
+    line-height: 1.8;
+    color: var(--text-primary);
+    border-left: 3px solid var(--accent-solid);
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.stats-only-view .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+@media (max-width: 640px) {
+    .stats-only-view .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
